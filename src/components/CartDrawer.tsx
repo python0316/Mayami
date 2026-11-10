@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { getLocalizedProductText, getLocalizedColorName } from '../utils/translator';
 import { 
   X, 
   Trash2, 
@@ -49,7 +50,7 @@ export const CartDrawer: React.FC = () => {
       />
 
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
-        <div className="w-screen max-w-md bg-white dark:bg-[#141414] shadow-2xl flex flex-col justify-between border-l border-neutral-200 dark:border-neutral-800 animate-in slide-in-from-right duration-300">
+        <div className="w-screen max-w-md bg-white dark:bg-[#141414] shadow-2xl flex flex-col justify-between border-l border-neutral-200 dark:border-neutral-800 animate-in slide-in-from-right duration-300 pb-[calc(56px+env(safe-area-inset-bottom,6px))] md:pb-0">
           {/* Header */}
           <div className="p-4 sm:p-6 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -114,14 +115,16 @@ export const CartDrawer: React.FC = () => {
                 {/* Items List */}
                 <div className="space-y-3">
                   {cart.map((item, index) => {
-                    const title = item.product.name?.[language] || item.product.short_title?.[language] || item.product.title[language] || item.product.title.uz;
+                    const title = getLocalizedProductText(item.product, 'name', language);
+                    const itemImage = item.selectedImage || item.selectedColor?.image_url || item.product.image_url;
+                    const colorName = getLocalizedColorName(item.selectedColor, language);
                     return (
                       <div
-                        key={`${item.product.id}-${item.selectedSize}-${index}`}
+                        key={`${item.product.id}-${item.selectedSize}-${item.selectedColor?.hex || ''}-${index}`}
                         className="flex items-center gap-3 p-3 rounded-2xl bg-neutral-50 dark:bg-[#1A1A1E] border border-neutral-200/80 dark:border-neutral-800"
                       >
                         <img
-                          src={item.product.image_url}
+                          src={itemImage}
                           alt={title}
                           className="w-16 h-16 rounded-xl object-cover border border-neutral-200 dark:border-neutral-700 shrink-0"
                         />
@@ -129,11 +132,12 @@ export const CartDrawer: React.FC = () => {
                           <h4 className="text-xs font-bold text-neutral-900 dark:text-white truncate">
                             {title}
                           </h4>
-                          <div className="text-[11px] text-neutral-500 flex items-center gap-2 mt-0.5">
-                            {item.selectedSize && <span>O'lcham: <b>{item.selectedSize}</b></span>}
+                          <div className="text-[11px] text-neutral-500 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                            {item.selectedSize && <span>O'lcham: <b className="text-neutral-800 dark:text-neutral-200">{item.selectedSize}</b></span>}
                             {item.selectedColor && (
                               <span className="flex items-center gap-1">
-                                Rang: <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: item.selectedColor.hex }} />
+                                Rang: <span className="w-2.5 h-2.5 rounded-full inline-block border border-neutral-300 dark:border-neutral-600" style={{ backgroundColor: item.selectedColor.hex }} />
+                                <span className="font-medium text-neutral-700 dark:text-neutral-300">{colorName}</span>
                               </span>
                             )}
                           </div>
@@ -145,21 +149,21 @@ export const CartDrawer: React.FC = () => {
                         {/* Quantity Stepper & Delete */}
                         <div className="flex flex-col items-end justify-between space-y-2">
                           <button
-                            onClick={() => removeFromCart(item.product.id, item.selectedSize)}
+                            onClick={() => removeFromCart(item.product.id, item.selectedSize, item.selectedColor?.hex)}
                             className="text-neutral-400 hover:text-rose-500 transition-colors p-1"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                           <div className="flex items-center bg-white dark:bg-[#252528] rounded-lg border border-neutral-200 dark:border-neutral-700">
                             <button
-                              onClick={() => updateCartQuantity(item.product.id, item.quantity - 1, item.selectedSize)}
+                              onClick={() => updateCartQuantity(item.product.id, item.quantity - 1, item.selectedSize, item.selectedColor?.hex)}
                               className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-600 rounded-l-lg"
                             >
                               <Minus className="w-3 h-3" />
                             </button>
                             <span className="px-2 text-xs font-bold">{item.quantity}</span>
                             <button
-                              onClick={() => updateCartQuantity(item.product.id, item.quantity + 1, item.selectedSize)}
+                              onClick={() => updateCartQuantity(item.product.id, item.quantity + 1, item.selectedSize, item.selectedColor?.hex)}
                               className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-600 rounded-r-lg"
                             >
                               <Plus className="w-3 h-3" />

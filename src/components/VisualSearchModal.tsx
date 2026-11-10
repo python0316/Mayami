@@ -128,7 +128,7 @@ export const VisualSearchModal: React.FC = () => {
     .slice(0, 4);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pb-[calc(70px+env(safe-area-inset-bottom,6px))] md:pb-4 bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
       <div 
         className="relative w-full max-w-3xl bg-white dark:bg-[#141418] rounded-3xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden my-auto p-6 sm:p-8 space-y-6"
         onClick={(e) => e.stopPropagation()}

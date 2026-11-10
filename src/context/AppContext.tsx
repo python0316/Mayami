@@ -5,6 +5,7 @@ import {
   Currency, 
   Product, 
   Category, 
+  Subcategory,
   Shop, 
   Story, 
   CartItem, 
@@ -25,6 +26,7 @@ import {
 import { initialReviews } from '../data/mockReviews';
 import { translations } from '../translations';
 import { formatUzbekPhone, getRawPhoneDigits, isCompleteUzbekPhone } from '../utils/phoneUtils';
+import { translateUzToRu, translateUzToEn, translateColorName } from '../utils/translator';
 
 export const DEFAULT_VENDOR_PERMISSIONS: PermissionKey[] = [
   'manage_products',
@@ -89,8 +91,10 @@ interface AppContextType {
   isMobileCatalogOpen: boolean;
   setIsMobileCatalogOpen: (open: boolean) => void;
   
-  // Customer Auth
+  // Customer Auth & Registered Users
   currentUser: CustomerUser | null;
+  registeredUsers: CustomerUser[];
+  deleteRegisteredUser: (userId: string) => void;
   loginUser: (phone: string, password?: string) => { success: boolean; message?: string };
   registerUser: (fullName: string, phone: string, password?: string) => { success: boolean; message?: string };
   logoutUser: () => void;
@@ -103,6 +107,8 @@ interface AppContextType {
   logoutUnified: () => void;
   updateShopPermissions: (shopId: string, permissions: PermissionKey[]) => void;
   updateShopCredentials: (shopId: string, creds: { username?: string; password?: string; name?: string; phone?: string; address?: string }) => void;
+  superAdminPassword: string;
+  updateSuperAdminPassword: (newPassword: string) => { success: boolean; message: string };
   
   // Legacy Aliases for seamless backward compatibility
   adminAuthenticated: boolean;
@@ -137,9 +143,9 @@ interface AppContextType {
   
   // Cart
   cart: CartItem[];
-  addToCart: (product: Product, quantity?: number, size?: string, color?: any) => void;
-  removeFromCart: (productId: number, size?: string) => void;
-  updateCartQuantity: (productId: number, quantity: number, size?: string) => void;
+  addToCart: (product: Product, quantity?: number, size?: string, color?: any, image?: string) => void;
+  removeFromCart: (productId: number, size?: string, colorHex?: string) => void;
+  updateCartQuantity: (productId: number, quantity: number, size?: string, colorHex?: string) => void;
   clearCart: () => void;
   cartTotal: number;
   cartCount: number;
@@ -171,6 +177,21 @@ interface AppContextType {
     category_slugs: string[];
     permissions?: PermissionKey[];
   }) => Shop;
+
+  // Category Actions (CRUD)
+  addCategory: (categoryData: {
+    slug?: string;
+    title_uz: string;
+    title_ru?: string;
+    title_en?: string;
+    icon?: string;
+    image?: string;
+    subcategories?: Subcategory[];
+  }) => Category;
+  updateCategory: (category: Category) => void;
+  deleteCategory: (categoryId: number) => { success: boolean; error?: string };
+  addSubcategory: (categoryId: number, subData: { title_uz: string; title_ru?: string; title_en?: string; slug?: string }) => void;
+  deleteSubcategory: (categoryId: number, subcategoryId: number) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -233,9 +254,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return `${Math.round(amountInUZS).toLocaleString('ru-RU')} so'm`;
   };
 
+  const USERS_STORAGE_KEY = 'mall_registered_users_v3';
+
   // Registered Users Database (Persistent in localStorage)
   const [registeredUsers, setRegisteredUsers] = useState<CustomerUser[]>(() => {
-    const saved = localStorage.getItem('mall_registered_users_v3');
+    const saved = localStorage.getItem(USERS_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -251,15 +274,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         phone: '+998 (88) 678-22-04',
         password: 'password123',
         email: 'nodirbek@Mayami.uz',
-        addresses: [],
-        createdAt: '2026-10-15'
+        addresses: ['Toshkent sh., Yunusobod 19, 12-uy', 'Chilonzor tumani, Bunyodkor 42'],
+        createdAt: '2026-10-15 11:20'
+      },
+      {
+        id: 'user_malika',
+        fullName: 'Malika Karimova',
+        phone: '+998 (90) 123-45-67',
+        password: 'password123',
+        email: 'malika.k@gmail.com',
+        addresses: ['Toshkent sh., Mirzo Ulug\'bek tumani, Mustaqillik shoh ko\'chasi 15'],
+        createdAt: '2026-10-22 14:45'
+      },
+      {
+        id: 'user_jasur',
+        fullName: 'Jasur Bekmirzayev',
+        phone: '+998 (97) 777-88-99',
+        password: 'password123',
+        email: 'jasur_bek@mail.ru',
+        addresses: ['Samarqand sh., Registon ko\'chasi 8'],
+        createdAt: '2026-11-01 09:15'
+      },
+      {
+        id: 'user_dilnoza',
+        fullName: 'Dilnoza Aliyeva',
+        phone: '+998 (99) 811-22-33',
+        password: 'password123',
+        email: 'dilnoza.a@inbox.uz',
+        addresses: ['Farg\'ona sh., Sayilgoh ko\'chasi 24'],
+        createdAt: '2026-11-05 16:30'
       }
     ];
   });
 
   useEffect(() => {
-    localStorage.setItem('mall_registered_users_v3', JSON.stringify(registeredUsers));
+    try {
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(registeredUsers));
+    } catch (e) {
+      console.error(e);
+    }
   }, [registeredUsers]);
+
+  const deleteRegisteredUser = (userId: string) => {
+    setRegisteredUsers(prev => {
+      const updated = prev.filter(u => u.id !== userId);
+      try {
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    if (currentUser?.id === userId) {
+      logoutUser();
+    }
+  };
 
   // Customer Auth (Guest by default, persistent profile when registered/logged in)
   const [currentUser, setCurrentUser] = useState<CustomerUser | null>(() => {
@@ -314,9 +381,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
+  const SHOPS_STORAGE_KEY = 'mall_shops_v10';
+
   // Shops State
   const [shops, setShops] = useState<Shop[]>(() => {
-    const saved = localStorage.getItem('mall_shops_v10');
+    const saved = localStorage.getItem(SHOPS_STORAGE_KEY);
     let loaded: Shop[] = [];
     if (saved) {
       try {
@@ -422,12 +491,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [adminSession]);
 
+  // SuperAdmin Password state
+  const [superAdminPassword, setSuperAdminPassword] = useState<string>(() => {
+    return localStorage.getItem('mall_superadmin_password') || 'admin2026';
+  });
+
+  const updateSuperAdminPassword = (newPassword: string): { success: boolean; message: string } => {
+    const trimmed = newPassword.trim();
+    if (!trimmed) {
+      return { success: false, message: "Parol bo'sh bo'lishi mumkin emas!" };
+    }
+    if (trimmed.length < 4) {
+      return { success: false, message: "Parol kamida 4 ta belgidan iborat bo'lishi kerak!" };
+    }
+    setSuperAdminPassword(trimmed);
+    localStorage.setItem('mall_superadmin_password', trimmed);
+    return { success: true, message: "SuperAdmin paroli muvaffaqiyatli yangilandi!" };
+  };
+
   const loginUnified = (username: string, pass: string): { success: boolean; role?: 'superadmin' | 'vendor'; error?: string } => {
     const u = username.trim().toLowerCase();
     const p = pass.trim();
 
     // 1. SuperAdmin (has ALL permissions)
-    if (u === 'admin' && (p === 'admin2026' || p === 'admin')) {
+    const storedAdminPass = localStorage.getItem('mall_superadmin_password') || superAdminPassword || 'admin2026';
+    if (u === 'admin' && (p === storedAdminPass || p === 'admin2026' || p === 'admin')) {
       const session: AdminUser = {
         id: 'superadmin_1',
         name: 'SuperAdmin (Boshqaruvchi)',
@@ -527,9 +615,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // SuperAdmin Role & Permission Management
   const updateShopPermissions = (shopId: string, permissions: PermissionKey[]) => {
-    setShops(prev =>
-      prev.map(s => (s.id === shopId ? { ...s, permissions } : s))
-    );
+    setShops(prev => {
+      const updated = prev.map(s => (s.id === shopId ? { ...s, permissions } : s));
+      try {
+        localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     // If current vendor is logged in, immediately update active session permissions
     if (adminSession?.shopId === shopId) {
       setAdminSession(prev => prev ? { ...prev, permissions } : null);
@@ -537,8 +629,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateShopCredentials = (shopId: string, creds: { username?: string; password?: string; name?: string; phone?: string; address?: string }) => {
-    setShops(prev =>
-      prev.map(s => {
+    setShops(prev => {
+      const updated = prev.map(s => {
         if (s.id === shopId) {
           return {
             ...s,
@@ -548,8 +640,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
         }
         return s;
-      })
-    );
+      });
+      try {
+        localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   // Backward compatibility aliases
@@ -576,9 +672,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     logoutUnified();
   };
 
-  // Products State
+  // Products Storage Keys
+  const PRODUCTS_STORAGE_KEY = 'mall_products_v12';
+  const DELETED_PRODUCTS_KEY = 'mall_deleted_product_ids_v1';
+
+  // Products State (100% Persistent across reload, logout, and navigation)
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('mall_products_v10');
+    // 1. Try reading from v12, then fallback to v11, then v10 so previous session data is restored
+    const saved = 
+      localStorage.getItem(PRODUCTS_STORAGE_KEY) || 
+      localStorage.getItem('mall_products_v11') || 
+      localStorage.getItem('mall_products_v10');
+
+    let deletedIds: number[] = [];
+    try {
+      const dSaved = localStorage.getItem(DELETED_PRODUCTS_KEY);
+      if (dSaved) deletedIds = JSON.parse(dSaved);
+    } catch (e) {
+      console.error(e);
+    }
+
     let loaded: Product[] = [];
     if (saved) {
       try {
@@ -588,46 +701,92 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error(e);
       }
     }
-    if (loaded.length === 0) {
-      loaded = initialProducts as Product[];
-    } else {
-      const initialMap = new Map((initialProducts as Product[]).map(p => [p.id, p]));
-      loaded = loaded.map(p => {
-        const init = initialMap.get(p.id);
-        return {
-          ...p,
-          name: p.name || init?.name || { uz: p.slug, ru: p.slug, en: p.slug },
-          title: p.title || init?.title || p.name || { uz: p.slug, ru: p.slug, en: p.slug },
-          short_title: p.short_title || init?.short_title || p.title || p.name || { uz: p.slug, ru: p.slug, en: p.slug },
-          description: p.description || init?.description || { uz: '', ru: '', en: '' },
-          subcategory_slug: p.subcategory_slug || init?.subcategory_slug
-        };
-      });
-    }
 
     const initialMap = new Map((initialProducts as Product[]).map(p => [p.id, p]));
-    return loaded.map(p => {
-      const init = initialMap.get(p.id);
-      const rawColors = p.colors && p.colors.length > 0 ? p.colors : (init?.colors || []);
-      const colors = rawColors.map((c) => {
-        const isOut = c.inStock === false || (p.id === 990001 && (c.hex === '#1d3557' || c.name_uz === 'Moviy'));
-        return {
-          ...c,
-          inStock: !isOut
-        };
-      });
-      return {
-        ...p,
-        colors,
-        subcategory_slug: p.subcategory_slug || init?.subcategory_slug,
-        image_url: (p.image_url || init?.image_url || '').replace(/cdn\.Mayami\.com/g, 'cdn.2020mall.com'),
-        images: (p.images || [p.image_url]).map(img => img.replace(/cdn\.Mayami\.com/g, 'cdn.2020mall.com'))
-      };
-    });
+    let allProducts: Product[] = [];
+
+    if (loaded.length === 0) {
+      allProducts = (initialProducts as Product[]).filter(p => !deletedIds.includes(p.id));
+    } else {
+      // Process all loaded products (user-added products + user-modified products)
+      const processedLoaded = loaded
+        .filter(p => !deletedIds.includes(p.id))
+        .map(p => {
+          const init = initialMap.get(p.id);
+
+          const nameUz = p.name?.uz || p.title?.uz || p.short_title?.uz || p.slug || '';
+          const nameRu = p.name?.ru || p.title?.ru || init?.name?.ru || translateUzToRu(nameUz);
+          const nameEn = p.name?.en || p.title?.en || init?.name?.en || translateUzToEn(nameUz);
+
+          const descUz = p.description?.uz || init?.description?.uz || '';
+          const descRu = p.description?.ru || init?.description?.ru || (descUz ? translateUzToRu(descUz) : '');
+          const descEn = p.description?.en || init?.description?.en || (descUz ? translateUzToEn(descUz) : '');
+
+          const rawColors = (p.colors && p.colors.length > 0) ? p.colors : (init?.colors || []);
+          const pImages = (p.images && p.images.length > 0 ? p.images : [p.image_url || init?.image_url || ''])
+            .map(img => (img || '').replace(/cdn\.Mayami\.com/g, 'cdn.2020mall.com'));
+
+          const colors = rawColors.map((c, idx) => {
+            const isOut = c.inStock === false || (p.id === 990001 && (c.hex === '#1d3557' || c.name_uz === 'Moviy'));
+            const colorImg = c.image_url || pImages[idx % pImages.length] || p.image_url || init?.image_url || '';
+            const cTrans = translateColorName(c.name_uz || '');
+            return {
+              ...c,
+              name_uz: c.name_uz || 'Standart',
+              name_ru: c.name_ru || cTrans.ru,
+              name_en: c.name_en || cTrans.en,
+              image_url: colorImg,
+              inStock: !isOut
+            };
+          });
+
+          return {
+            ...p,
+            name: {
+              uz: nameUz,
+              ru: nameRu,
+              en: nameEn
+            },
+            title: {
+              uz: p.title?.uz || nameUz,
+              ru: p.title?.ru || nameRu,
+              en: p.title?.en || nameEn
+            },
+            short_title: {
+              uz: p.short_title?.uz || nameUz,
+              ru: p.short_title?.ru || nameRu,
+              en: p.short_title?.en || nameEn
+            },
+            description: {
+              uz: descUz,
+              ru: descRu,
+              en: descEn
+            },
+            colors,
+            subcategory_slug: p.subcategory_slug || init?.subcategory_slug,
+            image_url: (p.image_url || init?.image_url || '').replace(/cdn\.Mayami\.com/g, 'cdn.2020mall.com'),
+            images: pImages
+          };
+        });
+
+      // Ensure any initial products that weren't deleted are present
+      const loadedIds = new Set(processedLoaded.map(p => p.id));
+      const missingInitial = (initialProducts as Product[]).filter(
+        p => !loadedIds.has(p.id) && !deletedIds.includes(p.id)
+      );
+
+      allProducts = [...processedLoaded, ...missingInitial];
+    }
+
+    return allProducts;
   });
 
   useEffect(() => {
-    localStorage.setItem('mall_products_v10', JSON.stringify(products));
+    try {
+      localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+    } catch (e) {
+      console.error(e);
+    }
   }, [products]);
 
   // REVIEWS & RATINGS STATE (Shaffof Sharhlar Tizimi)
@@ -648,6 +807,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('mall_reviews_v3', JSON.stringify(reviews));
   }, [reviews]);
 
+  const REVIEWS_STORAGE_KEY = 'mall_reviews_v3';
+
   const addReview = (reviewData: Omit<ProductReview, 'id' | 'createdAt'>) => {
     const newReview: ProductReview = {
       ...reviewData,
@@ -657,11 +818,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
       verifiedPurchase: true
     };
-    setReviews(prev => [newReview, ...prev]);
+    setReviews(prev => {
+      const updated = [newReview, ...prev];
+      try {
+        localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     // Recalculate rating & reviews_count for the product
-    setProducts(prev =>
-      prev.map(p => {
+    setProducts(prev => {
+      const list = prev.map(p => {
         if (p.id === reviewData.productId) {
           const prevCount = p.reviews_count || 0;
           const currentSum = (p.rating || 5) * prevCount;
@@ -674,8 +841,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
         }
         return p;
-      })
-    );
+      });
+      try {
+        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(list));
+      } catch (e) {}
+      return list;
+    });
   };
 
   const replyToReview = (
@@ -684,8 +855,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     senderName: string, 
     senderRole: 'shop_owner' | 'superadmin' = 'shop_owner'
   ) => {
-    setReviews(prev =>
-      prev.map(r => {
+    setReviews(prev => {
+      const updated = prev.map(r => {
         if (r.id === reviewId) {
           return {
             ...r,
@@ -699,15 +870,211 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
         }
         return r;
-      })
-    );
+      });
+      try {
+        localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const deleteReview = (reviewId: string) => {
-    setReviews(prev => prev.filter(r => r.id !== reviewId));
+    setReviews(prev => {
+      const updated = prev.filter(r => r.id !== reviewId);
+      try {
+        localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
-  const categories = initialCategories as unknown as Category[];
+  const CATEGORIES_STORAGE_KEY = 'mall_categories_v3';
+
+  // Categories State (Dynamic CRUD with LocalStorage persistence)
+  const [categories, setCategories] = useState<Category[]>(() => {
+    const saved = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return (initialCategories as unknown as Category[]).map(c => ({
+      ...c,
+      image: (c.image || '').replace(/cdn\.Mayami\.com/g, 'cdn.2020mall.com')
+    }));
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [categories]);
+
+  const addCategory = (categoryData: {
+    slug?: string;
+    title_uz: string;
+    title_ru?: string;
+    title_en?: string;
+    icon?: string;
+    image?: string;
+    subcategories?: Subcategory[];
+  }): Category => {
+    const id = Date.now();
+    const rawSlug = categoryData.slug?.trim() || categoryData.title_uz;
+    const generatedSlug = rawSlug
+      .toLowerCase()
+      .replace(/['`ʻʼ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `category-${id}`;
+
+    let finalSlug = generatedSlug;
+    let counter = 1;
+    while (categories.some(c => c.slug === finalSlug)) {
+      finalSlug = `${generatedSlug}-${counter++}`;
+    }
+
+    const newCat: Category = {
+      id,
+      slug: finalSlug,
+      title_uz: categoryData.title_uz.trim(),
+      title_ru: categoryData.title_ru?.trim() || categoryData.title_uz.trim(),
+      title_en: categoryData.title_en?.trim() || categoryData.title_uz.trim(),
+      icon: categoryData.icon?.trim() || '📦',
+      image: categoryData.image?.trim() || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&auto=format&fit=crop&q=80',
+      subcategories: categoryData.subcategories || []
+    };
+
+    setCategories(prev => {
+      const updated = [...prev, newCat];
+      try {
+        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    return newCat;
+  };
+
+  const updateCategory = (updatedCat: Category) => {
+    setCategories(prev => {
+      const updated = prev.map(cat => (cat.id === updatedCat.id ? { ...cat, ...updatedCat } : cat));
+      try {
+        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // If slug changed, update all products referencing old slug
+    const oldCat = categories.find(c => c.id === updatedCat.id);
+    if (oldCat && oldCat.slug !== updatedCat.slug) {
+      setProducts(prev => {
+        const pUpdated = prev.map(p =>
+          p.category_slug === oldCat.slug || p.category_id === updatedCat.id
+            ? { ...p, category_slug: updatedCat.slug, category_id: updatedCat.id }
+            : p
+        );
+        try {
+          localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(pUpdated));
+        } catch (e) {}
+        return pUpdated;
+      });
+    }
+  };
+
+  const deleteCategory = (categoryId: number): { success: boolean; error?: string } => {
+    const catToDelete = categories.find(c => c.id === categoryId);
+    if (!catToDelete) return { success: false, error: "Kategoriya topilmadi!" };
+
+    // Reassign products to fallback category so products don't break
+    const remainingCats = categories.filter(c => c.id !== categoryId);
+    const fallbackCat = remainingCats[0];
+    if (fallbackCat) {
+      setProducts(prev => {
+        const pUpdated = prev.map(p => {
+          if (p.category_slug === catToDelete.slug || p.category_id === categoryId) {
+            return {
+              ...p,
+              category_id: fallbackCat.id,
+              category_slug: fallbackCat.slug
+            };
+          }
+          return p;
+        });
+        try {
+          localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(pUpdated));
+        } catch (e) {}
+        return pUpdated;
+      });
+    }
+
+    setCategories(prev => {
+      const updated = prev.filter(c => c.id !== categoryId);
+      try {
+        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    return { success: true };
+  };
+
+  const addSubcategory = (
+    categoryId: number,
+    subData: { title_uz: string; title_ru?: string; title_en?: string; slug?: string }
+  ) => {
+    const subId = Date.now();
+    const rawSlug = subData.slug?.trim() || subData.title_uz;
+    const finalSlug = rawSlug
+      .toLowerCase()
+      .replace(/['`ʻʼ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `sub-${subId}`;
+
+    const newSub: Subcategory = {
+      id: subId,
+      slug: finalSlug,
+      title_uz: subData.title_uz.trim(),
+      title_ru: subData.title_ru?.trim() || subData.title_uz.trim(),
+      title_en: subData.title_en?.trim() || subData.title_uz.trim()
+    };
+
+    setCategories(prev => {
+      const updated = prev.map(c => {
+        if (c.id === categoryId) {
+          return {
+            ...c,
+            subcategories: [...(c.subcategories || []), newSub]
+          };
+        }
+        return c;
+      });
+      try {
+        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const deleteSubcategory = (categoryId: number, subcategoryId: number) => {
+    setCategories(prev => {
+      const updated = prev.map(c => {
+        if (c.id === categoryId) {
+          return {
+            ...c,
+            subcategories: (c.subcategories || []).filter(s => s.id !== subcategoryId)
+          };
+        }
+        return c;
+      });
+      try {
+        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
   const banners = initialBanners;
 
   // Navigation & Filtering
@@ -818,8 +1185,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Add story with 24h expiration timer
   const addStoryToShop = (shopId: string, newStoryData: Omit<Story, 'id' | 'createdAt' | 'views'>) => {
-    setShops(prev =>
-      prev.map(shop => {
+    setShops(prev => {
+      const updated = prev.map(shop => {
         if (shop.id === shopId) {
           const newStory: Story = {
             ...newStoryData,
@@ -833,13 +1200,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
         }
         return shop;
-      })
-    );
+      });
+      try {
+        localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const deleteStory = (shopId: string, storyId: string) => {
-    setShops(prev =>
-      prev.map(shop => {
+    setShops(prev => {
+      const updated = prev.map(shop => {
         if (shop.id === shopId) {
           return {
             ...shop,
@@ -847,8 +1218,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
         }
         return shop;
-      })
-    );
+      });
+      try {
+        localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const cleanExpiredStories = () => {
@@ -888,7 +1263,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [cart, currentUser]);
 
-  const addToCart = (product: Product, quantity = 1, size?: string, color?: any) => {
+  const addToCart = (product: Product, quantity = 1, size?: string, color?: any, image?: string) => {
+    const selectedImg = image || color?.image_url || product.image_url;
     setCart(prev => {
       const existing = prev.find(
         item =>
@@ -898,30 +1274,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       if (existing) {
         return prev.map(item =>
-          item === existing ? { ...item, quantity: item.quantity + quantity } : item
+          item === existing ? { ...item, quantity: item.quantity + quantity, selectedImage: selectedImg } : item
         );
       }
-      return [...prev, { product, quantity, selectedSize: size, selectedColor: color }];
+      return [...prev, { product, quantity, selectedSize: size, selectedColor: color, selectedImage: selectedImg }];
     });
     setIsCartOpen(true);
   };
 
-  const removeFromCart = (productId: number, size?: string) => {
+  const removeFromCart = (productId: number, size?: string, colorHex?: string) => {
     setCart(prev =>
       prev.filter(
-        item => !(item.product.id === productId && (!size || item.selectedSize === size))
+        item => !(
+          item.product.id === productId && 
+          (!size || item.selectedSize === size) &&
+          (!colorHex || item.selectedColor?.hex === colorHex)
+        )
       )
     );
   };
 
-  const updateCartQuantity = (productId: number, quantity: number, size?: string) => {
+  const updateCartQuantity = (productId: number, quantity: number, size?: string, colorHex?: string) => {
     if (quantity <= 0) {
-      removeFromCart(productId, size);
+      removeFromCart(productId, size, colorHex);
       return;
     }
     setCart(prev =>
       prev.map(item => {
-        if (item.product.id === productId && (!size || item.selectedSize === size)) {
+        if (
+          item.product.id === productId && 
+          (!size || item.selectedSize === size) &&
+          (!colorHex || item.selectedColor?.hex === colorHex)
+        ) {
           return { ...item, quantity };
         }
         return item;
@@ -1114,10 +1498,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const ORDERS_STORAGE_KEY = 'mall_orders_v3';
+
   // Orders State (100% working marketplace flow)
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('mall_orders_v2');
-    if (saved) return JSON.parse(saved);
+    const saved = localStorage.getItem(ORDERS_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.error(e);
+      }
+    }
     return [
       {
         id: "ORD-94281",
@@ -1126,7 +1519,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           {
             product: (initialProducts as Product[])[0],
             quantity: 1,
-            selectedSize: "Standart"
+            selectedSize: "Standart",
+            selectedColor: { name_uz: "Yashil", name_ru: "Зеленый", name_en: "Green", hex: "#1b4332", inStock: true },
+            selectedImage: (initialProducts as Product[])[0].image_url
           }
         ],
         totalAmount: 245000,
@@ -1147,7 +1542,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           {
             product: (initialProducts as Product[])[1],
             quantity: 2,
-            selectedSize: "L"
+            selectedSize: "L",
+            selectedColor: { name_uz: "Qora", name_ru: "Черный", name_en: "Black", hex: "#000000", inStock: true },
+            selectedImage: (initialProducts as Product[])[1].image_url
           }
         ],
         totalAmount: 185000,
@@ -1165,7 +1562,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   useEffect(() => {
-    localStorage.setItem('mall_orders_v2', JSON.stringify(orders));
+    try {
+      localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+    } catch (e) {
+      console.error(e);
+    }
   }, [orders]);
 
   const createOrder = (orderData: Omit<Order, 'id' | 'date' | 'status'>): Order => {
@@ -1176,7 +1577,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'pending',
       userId: currentUser?.id
     };
-    setOrders(prev => [newOrder, ...prev]);
+    setOrders(prev => {
+      const updated = [newOrder, ...prev];
+      try {
+        localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     if (orderData.address && currentUser) {
       addCustomerAddress(orderData.address);
     }
@@ -1185,12 +1592,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders(prev =>
-      prev.map(ord => (ord.id === orderId ? { ...ord, status } : ord))
-    );
+    setOrders(prev => {
+      const updated = prev.map(ord => (ord.id === orderId ? { ...ord, status } : ord));
+      try {
+        localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
-  // Product CRUD
+  // Product CRUD (Synchronous + Reactive LocalStorage Persistence)
   const addProduct = (newProd: Omit<Product, 'id' | 'slug'>) => {
     const id = Date.now();
     const product: Product = {
@@ -1201,41 +1612,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .replace(/\s+/g, '-')
         .replace(/[^a-z0-9-]/g, '') + `-${id.toString().slice(-4)}`
     };
-    setProducts(prev => [product, ...prev]);
+    setProducts(prev => {
+      const updated = [product, ...prev];
+      try {
+        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to immediately save new product to localStorage:', e);
+      }
+      return updated;
+    });
   };
 
   const updateProduct = (updated: Product) => {
-    setProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+    setProducts(prev => {
+      const list = prev.map(p => (p.id === updated.id ? updated : p));
+      try {
+        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(list));
+      } catch (e) {
+        console.error('Failed to immediately update product in localStorage:', e);
+      }
+      return list;
+    });
   };
 
   const deleteProduct = (productId: number) => {
-    setProducts(prev => prev.filter(p => p.id !== productId));
+    try {
+      const dSaved = localStorage.getItem(DELETED_PRODUCTS_KEY);
+      const dList = dSaved ? JSON.parse(dSaved) : [];
+      if (!dList.includes(productId)) {
+        localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify([...dList, productId]));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    setProducts(prev => {
+      const list = prev.filter(p => p.id !== productId);
+      try {
+        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(list));
+      } catch (e) {
+        console.error('Failed to immediately delete product from localStorage:', e);
+      }
+      return list;
+    });
   };
 
   const toggleShopVerification = (shopId: string) => {
-    setShops(prev =>
-      prev.map(shop =>
+    setShops(prev => {
+      const updated = prev.map(shop =>
         shop.id === shopId ? { ...shop, verified: !shop.verified } : shop
-      )
-    );
+      );
+      try {
+        localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const toggleShopStatus = (shopId: string) => {
-    setShops(prev =>
-      prev.map(shop =>
+    setShops(prev => {
+      const updated = prev.map(shop =>
         shop.id === shopId
-          ? { ...shop, status: shop.status === 'active' ? 'suspended' : 'active' }
+          ? { ...shop, status: (shop.status === 'active' ? 'suspended' : 'active') as 'active' | 'suspended' }
           : shop
-      )
-    );
+      );
+      try {
+        localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const updateShopProfile = (shopId: string, updates: Partial<Shop>) => {
-    setShops(prev =>
-      prev.map(shop =>
+    setShops(prev => {
+      const updated = prev.map(shop =>
         shop.id === shopId ? { ...shop, ...updates } : shop
-      )
-    );
+      );
+      try {
+        localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const createShopByAdmin = (shopData: {
@@ -1274,7 +1731,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       stories: [],
       permissions: shopData.permissions || DEFAULT_VENDOR_PERMISSIONS
     };
-    setShops(prev => [newShop, ...prev]);
+    setShops(prev => {
+      const updated = [newShop, ...prev];
+      try {
+        localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     return newShop;
   };
 
@@ -1312,6 +1775,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isMobileCatalogOpen,
         setIsMobileCatalogOpen,
         currentUser,
+        registeredUsers,
+        deleteRegisteredUser,
         loginUser,
         registerUser,
         logoutUser,
@@ -1324,6 +1789,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logoutUnified,
         updateShopPermissions,
         updateShopCredentials,
+        superAdminPassword,
+        updateSuperAdminPassword,
         
         // Backward Compatibility Aliases
         adminAuthenticated,
@@ -1376,7 +1843,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleShopVerification,
         toggleShopStatus,
         updateShopProfile,
-        createShopByAdmin
+        createShopByAdmin,
+        
+        // Category CRUD
+        addCategory,
+        updateCategory,
+        deleteCategory,
+        addSubcategory,
+        deleteSubcategory
       }}
     >
       {children}

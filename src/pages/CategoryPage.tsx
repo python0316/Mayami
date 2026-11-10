@@ -722,7 +722,7 @@ export const CategoryPage: React.FC = () => {
           />
 
           {/* Drawer Sheet */}
-          <div className="relative w-full max-w-xs sm:max-w-sm h-full bg-white dark:bg-[#171717] p-5 shadow-2xl flex flex-col z-10 overflow-y-auto">
+          <div className="relative w-full max-w-xs sm:max-w-sm h-full bg-white dark:bg-[#171717] p-5 pb-24 lg:pb-5 shadow-2xl flex flex-col z-10 overflow-y-auto">
             <div className="flex items-center justify-between pb-4 mb-4 border-b border-neutral-200 dark:border-neutral-800">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4 text-brand-teal" />

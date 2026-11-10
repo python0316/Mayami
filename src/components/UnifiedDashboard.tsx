@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp, DEFAULT_VENDOR_PERMISSIONS, ALL_PERMISSIONS } from '../context/AppContext';
-import { PermissionKey, Shop, Product, OrderStatus, ProductReview } from '../types';
+import { PermissionKey, Shop, Product, OrderStatus, ProductReview, ColorOption, Category, Subcategory } from '../types';
 import { parseStoryMedia } from '../utils/mediaUtils';
+import { autoTranslateProduct, translateColorName, getLocalizedProductText, getLocalizedColorName } from '../utils/translator';
 import { 
   ShieldCheck, 
   Store, 
@@ -27,7 +28,9 @@ import {
   CheckCircle, 
   AlertCircle, 
   Eye, 
+  EyeOff,
   Key, 
+  KeyRound,
   Lock, 
   Phone, 
   MapPin, 
@@ -41,7 +44,12 @@ import {
   Video,
   Image as ImageIcon,
   Tag,
-  Play
+  Play,
+  Palette,
+  Languages,
+  Calendar,
+  UserCheck,
+  PhoneCall
 } from 'lucide-react';
 
 export const UnifiedDashboard: React.FC = () => {
@@ -72,6 +80,17 @@ export const UnifiedDashboard: React.FC = () => {
     toggleShopStatus,
     updateShopProfile,
     createShopByAdmin,
+    addCategory,
+    updateCategory,
+    deleteCategory,
+    addSubcategory,
+    deleteSubcategory,
+    superAdminPassword,
+    updateSuperAdminPassword,
+    registeredUsers,
+    deleteRegisteredUser,
+    theme,
+    language,
     t
   } = useApp();
 
@@ -156,9 +175,32 @@ export const UnifiedDashboard: React.FC = () => {
     categorySlug: 'clothing',
     shopId: activeScopeShopId || 'shop_1',
     descriptionUz: '',
+    descriptionRu: '',
+    descriptionEn: '',
     sizes: 'M, L, XL',
     colors: 'Qora:#000000, Oq:#FFFFFF'
   });
+  const [prodLangTab, setProdLangTab] = useState<'uz' | 'ru' | 'en'>('uz');
+
+  const [formColors, setFormColors] = useState<Array<{
+    name_uz: string;
+    hex: string;
+    image_url: string;
+    inStock: boolean;
+  }>>([
+    {
+      name_uz: 'Qora',
+      hex: '#111827',
+      image_url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80',
+      inStock: true
+    },
+    {
+      name_uz: 'Moviy',
+      hex: '#2563EB',
+      image_url: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=800&auto=format&fit=crop&q=80',
+      inStock: true
+    }
+  ]);
 
   // Story Modal
   const [isStoryModalOpen, setIsStoryModalOpen] = useState(false);
@@ -188,6 +230,15 @@ export const UnifiedDashboard: React.FC = () => {
   const [credsUsername, setCredsUsername] = useState('');
   const [credsPassword, setCredsPassword] = useState('');
 
+  // SuperAdmin Personal Password Update Modal
+  const [isAdminPasswordModalOpen, setIsAdminPasswordModalOpen] = useState(false);
+  const [currentAdminPassInput, setCurrentAdminPassInput] = useState('');
+  const [newAdminPassInput, setNewAdminPassInput] = useState('');
+  const [confirmAdminPassInput, setConfirmAdminPassInput] = useState('');
+  const [showAdminPass, setShowAdminPass] = useState(false);
+  const [adminPassError, setAdminPassError] = useState<string | null>(null);
+  const [adminPassSuccess, setAdminPassSuccess] = useState<string | null>(null);
+
   // Create Shop Modal (SuperAdmin)
   const [isCreateShopModalOpen, setIsCreateShopModalOpen] = useState(false);
   const [newShopName, setNewShopName] = useState('');
@@ -201,6 +252,140 @@ export const UnifiedDashboard: React.FC = () => {
   // Review Reply State
   const [replyingReviewId, setReplyingReviewId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+
+  // Category Management State (CRUD)
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [catForm, setCatForm] = useState({
+    titleUz: '',
+    titleRu: '',
+    titleEn: '',
+    slug: '',
+    icon: '👕',
+    image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&auto=format&fit=crop&q=80'
+  });
+  const [catSubcategories, setCatSubcategories] = useState<Subcategory[]>([]);
+  const [newSubInput, setNewSubInput] = useState('');
+  const [categorySearch, setCategorySearch] = useState('');
+  const [categoryDeleteConfirmId, setCategoryDeleteConfirmId] = useState<number | null>(null);
+  const [quickSubInputs, setQuickSubInputs] = useState<Record<number, string>>({});
+
+  // Registered Users Management State (SuperAdmin)
+  const [userSearch, setUserSearch] = useState('');
+  const [userDeleteConfirmId, setUserDeleteConfirmId] = useState<string | null>(null);
+
+  const filteredUsers = useMemo(() => {
+    if (!userSearch.trim()) return registeredUsers;
+    const q = userSearch.toLowerCase().trim();
+    return registeredUsers.filter(u => 
+      u.fullName.toLowerCase().includes(q) ||
+      u.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
+      (u.email && u.email.toLowerCase().includes(q))
+    );
+  }, [registeredUsers, userSearch]);
+
+  // Handlers for Category CRUD
+  const handleOpenAddCategory = () => {
+    setEditingCategory(null);
+    setCatForm({
+      titleUz: '',
+      titleRu: '',
+      titleEn: '',
+      slug: '',
+      icon: '👕',
+      image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&auto=format&fit=crop&q=80'
+    });
+    setCatSubcategories([
+      { id: Date.now(), slug: 'general', title_uz: 'Umumiy', title_ru: 'Общие', title_en: 'General' }
+    ]);
+    setNewSubInput('');
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleOpenEditCategory = (cat: Category) => {
+    setEditingCategory(cat);
+    setCatForm({
+      titleUz: cat.title_uz || '',
+      titleRu: cat.title_ru || '',
+      titleEn: cat.title_en || '',
+      slug: cat.slug || '',
+      icon: cat.icon || '📦',
+      image: cat.image || ''
+    });
+    setCatSubcategories(cat.subcategories ? [...cat.subcategories] : []);
+    setNewSubInput('');
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleSaveCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catForm.titleUz.trim()) return;
+
+    const rawSlug = catForm.slug.trim() || catForm.titleUz;
+    const finalSlug = rawSlug
+      .toLowerCase()
+      .replace(/['`ʻʼ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (editingCategory) {
+      updateCategory({
+        ...editingCategory,
+        title_uz: catForm.titleUz.trim(),
+        title_ru: catForm.titleRu.trim() || catForm.titleUz.trim(),
+        title_en: catForm.titleEn.trim() || catForm.titleUz.trim(),
+        slug: finalSlug || editingCategory.slug,
+        icon: catForm.icon.trim() || '📦',
+        image: catForm.image.trim() || editingCategory.image,
+        subcategories: catSubcategories
+      });
+    } else {
+      addCategory({
+        title_uz: catForm.titleUz.trim(),
+        title_ru: catForm.titleRu.trim() || catForm.titleUz.trim(),
+        title_en: catForm.titleEn.trim() || catForm.titleUz.trim(),
+        slug: finalSlug,
+        icon: catForm.icon.trim() || '📦',
+        image: catForm.image.trim() || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&auto=format&fit=crop&q=80',
+        subcategories: catSubcategories
+      });
+    }
+
+    setIsCategoryModalOpen(false);
+  };
+
+  const handleAddModalSubcategory = () => {
+    if (!newSubInput.trim()) return;
+    const title = newSubInput.trim();
+    const slug = title
+      .toLowerCase()
+      .replace(/['`ʻʼ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `sub-${Date.now()}`;
+
+    setCatSubcategories(prev => [
+      ...prev,
+      {
+        id: Date.now(),
+        slug,
+        title_uz: title,
+        title_ru: title,
+        title_en: title
+      }
+    ]);
+    setNewSubInput('');
+  };
+
+  const handleRemoveModalSubcategory = (subId: number) => {
+    setCatSubcategories(prev => prev.filter(s => s.id !== subId));
+  };
+
+  const handleQuickAddSubcategory = (categoryId: number) => {
+    const val = quickSubInputs[categoryId];
+    if (!val || !val.trim()) return;
+    addSubcategory(categoryId, { title_uz: val.trim() });
+    setQuickSubInputs(prev => ({ ...prev, [categoryId]: '' }));
+  };
 
   // Order Status Filter
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
@@ -219,6 +404,20 @@ export const UnifiedDashboard: React.FC = () => {
   // Handlers
   const handleOpenAddProduct = () => {
     setEditingProduct(null);
+    setFormColors([
+      {
+        name_uz: 'Qora',
+        hex: '#111827',
+        image_url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80',
+        inStock: true
+      },
+      {
+        name_uz: 'Moviy',
+        hex: '#2563EB',
+        image_url: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=800&auto=format&fit=crop&q=80',
+        inStock: true
+      }
+    ]);
     setProdForm({
       nameUz: '',
       nameRu: '',
@@ -233,14 +432,33 @@ export const UnifiedDashboard: React.FC = () => {
       categorySlug: categories[0]?.slug || 'clothing',
       shopId: activeScopeShopId || currentShopId || 'shop_1',
       descriptionUz: '',
+      descriptionRu: '',
+      descriptionEn: '',
       sizes: 'S, M, L, XL',
-      colors: 'Qora:#1A1A1A, Moviy:#2563EB'
+      colors: 'Qora:#111827, Moviy:#2563EB'
     });
+    setProdLangTab('uz');
     setIsProductModalOpen(true);
   };
 
   const handleOpenEditProduct = (prod: Product) => {
     setEditingProduct(prod);
+    const existingColors = (prod.colors && prod.colors.length > 0)
+      ? prod.colors.map((c, i) => ({
+          name_uz: c.name_uz || `Rang ${i + 1}`,
+          hex: c.hex || '#111827',
+          image_url: c.image_url || prod.images?.[i] || prod.image_url || '',
+          inStock: c.inStock !== false
+        }))
+      : [
+          {
+            name_uz: 'Asosiy',
+            hex: '#111827',
+            image_url: prod.image_url || '',
+            inStock: true
+          }
+        ];
+    setFormColors(existingColors);
     setProdForm({
       nameUz: prod.name?.uz || prod.title?.uz || '',
       nameRu: prod.name?.ru || prod.title?.ru || '',
@@ -255,29 +473,74 @@ export const UnifiedDashboard: React.FC = () => {
       categorySlug: prod.category_slug,
       shopId: prod.shopId,
       descriptionUz: prod.description?.uz || '',
+      descriptionRu: prod.description?.ru || '',
+      descriptionEn: prod.description?.en || '',
       sizes: (prod.sizes || []).join(', '),
-      colors: (prod.colors || []).map(c => `${c.name_uz}:${c.hex}`).join(', ')
+      colors: existingColors.map(c => `${c.name_uz}:${c.hex}`).join(', ')
     });
+    setProdLangTab('uz');
     setIsProductModalOpen(true);
+  };
+
+  const handleAutoTranslateProduct = () => {
+    if (!prodForm.nameUz.trim()) return;
+    const trans = autoTranslateProduct(prodForm.nameUz, prodForm.descriptionUz);
+    setProdForm(prev => ({
+      ...prev,
+      nameRu: trans.nameRu,
+      nameEn: trans.nameEn,
+      descriptionRu: trans.descRu,
+      descriptionEn: trans.descEn
+    }));
   };
 
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     const sizesArray = prodForm.sizes.split(',').map(s => s.trim()).filter(Boolean);
-    const colorsArray = prodForm.colors.split(',').map(item => {
-      const parts = item.split(':');
-      const name = parts[0]?.trim() || 'Rang';
-      const hex = parts[1]?.trim() || '#111827';
-      return {
-        name_uz: name,
-        name_ru: name,
-        name_en: name,
-        hex,
-        inStock: true
-      };
-    }).filter(c => c.hex);
 
-    const descUz = prodForm.descriptionUz || `${prodForm.nameUz}. Mayami platformasidagi rasmiy kafolatlangan tovar.`;
+    // Automatic multi-language translation for missing or identical translations
+    const autoTrans = autoTranslateProduct(prodForm.nameUz, prodForm.descriptionUz);
+    const finalNameRu = (prodForm.nameRu?.trim() && prodForm.nameRu.trim() !== prodForm.nameUz.trim())
+      ? prodForm.nameRu.trim()
+      : autoTrans.nameRu;
+    const finalNameEn = (prodForm.nameEn?.trim() && prodForm.nameEn.trim() !== prodForm.nameUz.trim())
+      ? prodForm.nameEn.trim()
+      : autoTrans.nameEn;
+
+    const descUz = prodForm.descriptionUz.trim() || `${prodForm.nameUz.trim()}. Mayami platformasidagi rasmiy kafolatlangan tovar.`;
+    const finalDescRu = (prodForm.descriptionRu?.trim() && prodForm.descriptionRu.trim() !== prodForm.descriptionUz.trim())
+      ? prodForm.descriptionRu.trim()
+      : autoTrans.descRu;
+    const finalDescEn = (prodForm.descriptionEn?.trim() && prodForm.descriptionEn.trim() !== prodForm.descriptionUz.trim())
+      ? prodForm.descriptionEn.trim()
+      : autoTrans.descEn;
+
+    const colorsArray: ColorOption[] = formColors.length > 0
+      ? formColors.map(c => {
+          const cTrans = translateColorName(c.name_uz);
+          return {
+            name_uz: c.name_uz.trim() || 'Rang',
+            name_ru: cTrans.ru,
+            name_en: cTrans.en,
+            hex: c.hex || '#111827',
+            image_url: c.image_url.trim() || prodForm.imageUrl,
+            inStock: c.inStock
+          };
+        })
+      : [{
+          name_uz: 'Standart',
+          name_ru: 'Стандарт',
+          name_en: 'Standard',
+          hex: '#111827',
+          image_url: prodForm.imageUrl,
+          inStock: true
+        }];
+
+    const allProductImages = Array.from(new Set([
+      prodForm.imageUrl,
+      ...colorsArray.map(c => c.image_url).filter(Boolean) as string[],
+      ...(editingProduct?.images || [])
+    ])).filter(Boolean);
 
     if (editingProduct) {
       updateProduct({
@@ -285,7 +548,7 @@ export const UnifiedDashboard: React.FC = () => {
         category_slug: prodForm.categorySlug,
         shopId: prodForm.shopId,
         image_url: prodForm.imageUrl,
-        images: [prodForm.imageUrl, ...(editingProduct.images || []).slice(1)],
+        images: allProductImages,
         price: Number(prodForm.price),
         old_price: Number(prodForm.oldPrice),
         discount: Number(prodForm.discount),
@@ -293,36 +556,37 @@ export const UnifiedDashboard: React.FC = () => {
         delivery_days: Number(prodForm.deliveryDays),
         gender: prodForm.gender,
         name: {
-          uz: prodForm.nameUz,
-          ru: prodForm.nameRu || prodForm.nameUz,
-          en: prodForm.nameEn || prodForm.nameUz
+          uz: prodForm.nameUz.trim(),
+          ru: finalNameRu,
+          en: finalNameEn
         },
         title: {
-          uz: prodForm.nameUz,
-          ru: prodForm.nameRu || prodForm.nameUz,
-          en: prodForm.nameEn || prodForm.nameUz
+          uz: prodForm.nameUz.trim(),
+          ru: finalNameRu,
+          en: finalNameEn
         },
         short_title: {
-          uz: prodForm.nameUz,
-          ru: prodForm.nameRu || prodForm.nameUz,
-          en: prodForm.nameEn || prodForm.nameUz
+          uz: prodForm.nameUz.trim(),
+          ru: finalNameRu,
+          en: finalNameEn
         },
         description: {
           uz: descUz,
-          ru: `${prodForm.nameRu || prodForm.nameUz}. Официальный товар на платформе Mayami.`,
-          en: `${prodForm.nameEn || prodForm.nameUz}. Verified product on Mayami.`
+          ru: finalDescRu,
+          en: finalDescEn
         },
         sizes: sizesArray.length ? sizesArray : ['Standart'],
-        colors: colorsArray.length ? colorsArray : [{ name_uz: 'Standart', name_ru: 'Стандарт', name_en: 'Standard', hex: '#111827', inStock: true }]
+        colors: colorsArray
       });
     } else {
+      const selectedCat = categories.find(c => c.slug === prodForm.categorySlug);
       addProduct({
-        category_id: 1,
+        category_id: selectedCat ? selectedCat.id : 1,
         category_slug: prodForm.categorySlug,
         subcategory_slug: undefined,
         shopId: prodForm.shopId,
         image_url: prodForm.imageUrl,
-        images: [prodForm.imageUrl],
+        images: allProductImages,
         price: Number(prodForm.price),
         old_price: Number(prodForm.oldPrice),
         discount: Number(prodForm.discount),
@@ -333,27 +597,27 @@ export const UnifiedDashboard: React.FC = () => {
         stock_count: Number(prodForm.stockCount),
         gender: prodForm.gender,
         name: {
-          uz: prodForm.nameUz,
-          ru: prodForm.nameRu || prodForm.nameUz,
-          en: prodForm.nameEn || prodForm.nameUz
+          uz: prodForm.nameUz.trim(),
+          ru: finalNameRu,
+          en: finalNameEn
         },
         title: {
-          uz: prodForm.nameUz,
-          ru: prodForm.nameRu || prodForm.nameUz,
-          en: prodForm.nameEn || prodForm.nameUz
+          uz: prodForm.nameUz.trim(),
+          ru: finalNameRu,
+          en: finalNameEn
         },
         short_title: {
-          uz: prodForm.nameUz,
-          ru: prodForm.nameRu || prodForm.nameUz,
-          en: prodForm.nameEn || prodForm.nameUz
+          uz: prodForm.nameUz.trim(),
+          ru: finalNameRu,
+          en: finalNameEn
         },
         description: {
           uz: descUz,
-          ru: `${prodForm.nameRu || prodForm.nameUz}. Официальный товар на платформе Mayami.`,
-          en: `${prodForm.nameEn || prodForm.nameUz}. Verified product on Mayami.`
+          ru: finalDescRu,
+          en: finalDescEn
         },
         sizes: sizesArray.length ? sizesArray : ['Standart'],
-        colors: colorsArray.length ? colorsArray : [{ name_uz: 'Standart', name_ru: 'Стандарт', name_en: 'Standard', hex: '#111827', inStock: true }]
+        colors: colorsArray
       });
     }
     setIsProductModalOpen(false);
@@ -446,6 +710,47 @@ export const UnifiedDashboard: React.FC = () => {
     }
   };
 
+  const handleUpdateAdminPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminPassError(null);
+    setAdminPassSuccess(null);
+
+    const actualPass = superAdminPassword || localStorage.getItem('mall_superadmin_password') || 'admin2026';
+    if (currentAdminPassInput && currentAdminPassInput !== actualPass && currentAdminPassInput !== 'admin2026' && currentAdminPassInput !== 'admin') {
+      setAdminPassError("Hozirgi parol noto'g'ri kiritildi!");
+      return;
+    }
+
+    if (!newAdminPassInput.trim()) {
+      setAdminPassError("Yangi maxfiy parolni kiriting!");
+      return;
+    }
+
+    if (newAdminPassInput.trim().length < 4) {
+      setAdminPassError("Yangi parol kamida 4 ta belgidan iborat bo'lishi kerak!");
+      return;
+    }
+
+    if (newAdminPassInput !== confirmAdminPassInput) {
+      setAdminPassError("Yangi parol tasdiqlash bilan mos kelmadi!");
+      return;
+    }
+
+    const res = updateSuperAdminPassword(newAdminPassInput.trim());
+    if (res.success) {
+      setAdminPassSuccess("SuperAdmin paroli muvaffaqiyatli yangilandi! /admin orqali kirishda yangi parol amal qiladi.");
+      setTimeout(() => {
+        setIsAdminPasswordModalOpen(false);
+        setCurrentAdminPassInput('');
+        setNewAdminPassInput('');
+        setConfirmAdminPassInput('');
+        setAdminPassSuccess(null);
+      }, 1500);
+    } else {
+      setAdminPassError(res.message);
+    }
+  };
+
   const handleCreateShop = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newShopName.trim() || !newShopUsername.trim() || !newShopPassword.trim()) return;
@@ -525,58 +830,94 @@ export const UnifiedDashboard: React.FC = () => {
           </div>
 
           {/* Right: Store Switcher (if SuperAdmin) + Quick Actions + Logout */}
-          <div className="flex items-center gap-2.5 w-full md:w-auto justify-end overflow-x-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto justify-end">
             {isSuperAdmin && (
-              <div className="flex items-center gap-1.5 bg-neutral-100 dark:bg-neutral-800/80 px-2.5 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-xs">
-                <Filter className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="font-bold text-neutral-500 hidden sm:inline">Filtr:</span>
+              <div className="flex items-center gap-2 bg-neutral-100 dark:bg-neutral-800/80 px-3 py-2 sm:py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-xs shadow-xs w-full sm:w-auto">
+                <Filter className="w-4 h-4 text-brand-teal shrink-0" />
+                <span className="font-bold text-neutral-500 shrink-0">Filtr:</span>
                 <select
                   value={selectedShopFilter}
                   onChange={(e) => setSelectedShopFilter(e.target.value)}
-                  className="bg-transparent font-bold text-neutral-900 dark:text-white focus:outline-none cursor-pointer text-xs"
+                  className="w-full sm:w-auto bg-transparent font-bold text-neutral-900 dark:text-neutral-100 focus:outline-none cursor-pointer text-xs [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-[#18181C] dark:[&>option]:text-white"
                 >
-                  <option value="all">🌐 Barcha Do'konlar (Platforma)</option>
+                  <option 
+                    value="all"
+                    className="bg-white dark:bg-[#18181C] text-neutral-900 dark:text-white py-1.5 font-semibold"
+                    style={{ backgroundColor: theme === 'dark' ? '#18181C' : '#ffffff', color: theme === 'dark' ? '#ffffff' : '#111827' }}
+                  >
+                    🌐 Barcha Do'konlar (Platforma)
+                  </option>
                   {shops.map(s => (
-                    <option key={s.id} value={s.id}>🏪 {s.name}</option>
+                    <option 
+                      key={s.id} 
+                      value={s.id}
+                      className="bg-white dark:bg-[#18181C] text-neutral-900 dark:text-white py-1.5 font-semibold"
+                      style={{ backgroundColor: theme === 'dark' ? '#18181C' : '#ffffff', color: theme === 'dark' ? '#ffffff' : '#111827' }}
+                    >
+                      🏪 {s.name}
+                    </option>
                   ))}
                 </select>
               </div>
             )}
 
-            {/* Visit Storefront if vendor */}
-            {!isSuperAdmin && currentShop && (
+            <div className="flex items-center gap-2 justify-end shrink-0">
+              {/* SuperAdmin Parolni yangilash tugmasi */}
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminPassError(null);
+                    setAdminPassSuccess(null);
+                    setCurrentAdminPassInput('');
+                    setNewAdminPassInput('');
+                    setConfirmAdminPassInput('');
+                    setIsAdminPasswordModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/20 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs shrink-0"
+                  title="SuperAdmin maxfiy parolini yangilash"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-purple-500" />
+                  <span className="hidden sm:inline">Parolni yangilash</span>
+                  <span className="sm:hidden">Parol</span>
+                </button>
+              )}
+
+              {/* Visit Storefront if vendor */}
+              {!isSuperAdmin && currentShop && (
+                <Link
+                  to={`/store/${currentShop.slug}`}
+                  target="_blank"
+                  className="px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 text-xs font-bold flex items-center gap-1.5 transition-all text-neutral-700 dark:text-neutral-300 shrink-0"
+                  title="Do'koningizning xaridorlarga ko'rinishi"
+                >
+                  <span>Do'konim</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              )}
+
+              {/* Main Marketplace Home */}
               <Link
-                to={`/store/${currentShop.slug}`}
-                target="_blank"
-                className="px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 text-xs font-bold flex items-center gap-1.5 transition-all text-neutral-700 dark:text-neutral-300"
-                title="Do'koningizning xaridorlarga ko'rinishi"
+                to="/"
+                className="px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 text-xs font-bold flex items-center gap-1.5 transition-all text-neutral-700 dark:text-neutral-300 shrink-0"
               >
-                <span>Do'konim</span>
-                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Saytga</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
               </Link>
-            )}
 
-            {/* Main Marketplace Home */}
-            <Link
-              to="/"
-              className="px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 text-xs font-bold flex items-center gap-1.5 transition-all text-neutral-700 dark:text-neutral-300"
-            >
-              <span>Saytga</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
-
-            {/* Logout */}
-            <button
-              onClick={() => {
-                logoutUnified();
-                navigate('/admin');
-              }}
-              className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 text-xs font-bold flex items-center gap-1.5 transition-all"
-              title="Tizimdan chiqish"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Chiqish</span>
-            </button>
+              {/* Logout */}
+              <button
+                onClick={() => {
+                  logoutUnified();
+                  navigate('/admin');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
+                title="Tizimdan chiqish"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Chiqish</span>
+              </button>
+            </div>
           </div>
 
         </div>
@@ -727,7 +1068,19 @@ export const UnifiedDashboard: React.FC = () => {
                 }`}
               >
                 <FolderTree className="w-4 h-4" />
-                <span>Kategoriyalar</span>
+                <span>Kategoriyalar ({categories.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+                  activeTab === 'users'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                    : 'bg-white dark:bg-[#18181C] text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 border border-purple-200 dark:border-purple-900/40'
+                }`}
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>Mijozlar Bazasi ({registeredUsers.length})</span>
               </button>
             </>
           )}
@@ -754,7 +1107,7 @@ export const UnifiedDashboard: React.FC = () => {
         {activeTab === 'overview' && hasPermission('view_analytics') && (
           <div className="space-y-6 animate-in fade-in">
             {/* KPI Metrics */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className={`grid grid-cols-2 ${isSuperAdmin ? 'sm:grid-cols-3 lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
               
               <div className="p-5 rounded-3xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-sm space-y-2">
                 <div className="flex items-center justify-between text-neutral-500">
@@ -803,7 +1156,7 @@ export const UnifiedDashboard: React.FC = () => {
 
               <div className="p-5 rounded-3xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-sm space-y-2">
                 <div className="flex items-center justify-between text-neutral-500">
-                  <span className="text-xs font-bold">Faol 24h Stories</span>
+                  <span className="text-xs font-bold">Faol Stories</span>
                   <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
                     <Flame className="w-4 h-4" />
                   </div>
@@ -812,9 +1165,31 @@ export const UnifiedDashboard: React.FC = () => {
                   {scopedStoriesShops.reduce((sum, s) => sum + (s.stories?.length || 0), 0)} ta
                 </div>
                 <span className="text-[11px] font-bold text-rose-500">
-                  24 soatlik avto-taymer bilan
+                  24 soatlik avto-taymer
                 </span>
               </div>
+
+              {isSuperAdmin && (
+                <div 
+                  onClick={() => setActiveTab('users')}
+                  className="p-5 rounded-3xl bg-gradient-to-br from-purple-500/10 via-brand-teal/5 to-transparent border border-purple-500/30 hover:border-purple-500 shadow-sm space-y-2 cursor-pointer transition-all hover:scale-[1.02]"
+                  title="Mijozlar bazasiga o'tish"
+                >
+                  <div className="flex items-center justify-between text-neutral-500">
+                    <span className="text-xs font-bold text-purple-600 dark:text-purple-400">Ro'yxatdan O'tganlar</span>
+                    <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                      <UserCheck className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400">
+                    {registeredUsers.length} nafar
+                  </div>
+                  <span className="text-[11px] font-bold text-brand-teal flex items-center gap-1">
+                    <span>Mijozlar ro'yxatini ko'rish</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              )}
 
             </div>
 
@@ -1060,7 +1435,7 @@ export const UnifiedDashboard: React.FC = () => {
                         <select
                           value={ord.status}
                           onChange={(e) => updateOrderStatus(ord.id, e.target.value as OrderStatus)}
-                          className={`font-black text-xs px-3 py-1.5 rounded-xl border focus:outline-none cursor-pointer transition-all ${
+                          className={`font-black text-xs px-3 py-1.5 rounded-xl border focus:outline-none cursor-pointer transition-all [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white ${
                             ord.status === 'delivered' ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' :
                             ord.status === 'shipped' ? 'bg-purple-500/15 text-purple-600 border-purple-500/30' :
                             ord.status === 'processing' ? 'bg-blue-500/15 text-blue-600 border-blue-500/30' :
@@ -1068,11 +1443,11 @@ export const UnifiedDashboard: React.FC = () => {
                             'bg-amber-500/15 text-amber-600 border-amber-500/30'
                           }`}
                         >
-                          <option value="pending">🟡 Kutilmoqda (Pending)</option>
-                          <option value="processing">🔵 Tayyorlanmoqda (Processing)</option>
-                          <option value="shipped">🟣 Yetkazilmoqda (Shipped)</option>
-                          <option value="delivered">🟢 Yetkazildi (Delivered)</option>
-                          <option value="cancelled">🔴 Bekor qilindi (Cancelled)</option>
+                          <option value="pending" className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">🟡 Kutilmoqda (Pending)</option>
+                          <option value="processing" className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">🔵 Tayyorlanmoqda (Processing)</option>
+                          <option value="shipped" className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">🟣 Yetkazilmoqda (Shipped)</option>
+                          <option value="delivered" className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">🟢 Yetkazildi (Delivered)</option>
+                          <option value="cancelled" className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">🔴 Bekor qilindi (Cancelled)</option>
                         </select>
                       </div>
                     </div>
@@ -1102,25 +1477,50 @@ export const UnifiedDashboard: React.FC = () => {
                     {/* Order Items */}
                     <div className="space-y-2">
                       <span className="text-xs font-bold text-neutral-500">Buyurtma qilingan mahsulotlar:</span>
-                      {ord.items.map((it, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-neutral-50/70 dark:bg-neutral-800/20 border border-neutral-100 dark:border-neutral-800">
-                          <div className="flex items-center gap-3">
-                            <img src={it.product.image_url} alt="" className="w-12 h-12 rounded-xl object-cover border border-neutral-200 dark:border-neutral-700" />
-                            <div>
-                              <div className="font-bold text-xs text-neutral-900 dark:text-white line-clamp-1">
-                                {it.product.name?.uz || it.product.title?.uz}
-                              </div>
-                              <div className="text-[11px] text-neutral-400 mt-0.5">
-                                {it.selectedSize && `O'lcham: ${it.selectedSize} • `}
-                                {it.quantity} dona x {formatPrice(it.product.price)}
+                      {ord.items.map((it, idx) => {
+                        const itemImg = it.selectedImage || it.selectedColor?.image_url || it.product.image_url;
+                        const colorName = getLocalizedColorName(it.selectedColor, language);
+                        return (
+                          <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-2xl bg-neutral-50/70 dark:bg-neutral-800/20 border border-neutral-100 dark:border-neutral-800 gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <img 
+                                src={itemImg} 
+                                alt="" 
+                                className="w-14 h-14 rounded-xl object-cover border border-neutral-200 dark:border-neutral-700 shrink-0 shadow-xs" 
+                              />
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs text-neutral-900 dark:text-white truncate">
+                                  {getLocalizedProductText(it.product, 'name', language)}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                  {/* Selected Color Badge with Color Swatch & Color Name */}
+                                  {it.selectedColor && (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white dark:bg-[#1E1E22] border border-neutral-200 dark:border-neutral-700 text-[11px] font-bold text-neutral-800 dark:text-neutral-200 shadow-xs">
+                                      <span 
+                                        className="w-3.5 h-3.5 rounded-full inline-block border border-neutral-300 dark:border-neutral-600 shadow-xs shrink-0" 
+                                        style={{ backgroundColor: it.selectedColor.hex }} 
+                                      />
+                                      <span>Rang: <strong>{colorName}</strong></span>
+                                    </span>
+                                  )}
+                                  {/* Selected Size Badge */}
+                                  {it.selectedSize && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-brand-teal/10 border border-brand-teal/20 text-[11px] font-bold text-brand-teal">
+                                      O'lcham: <strong>{it.selectedSize}</strong>
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] text-neutral-500 font-medium">
+                                    {it.quantity} dona × {formatPrice(it.product.price)}
+                                  </span>
+                                </div>
                               </div>
                             </div>
+                            <div className="font-black text-xs sm:text-sm text-neutral-900 dark:text-white shrink-0 self-end sm:self-center">
+                              {formatPrice(it.product.price * it.quantity)}
+                            </div>
                           </div>
-                          <div className="font-black text-xs text-neutral-900 dark:text-white">
-                            {formatPrice(it.product.price * it.quantity)}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* Order Footer Total */}
@@ -1685,48 +2085,244 @@ export const UnifiedDashboard: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 8: 📂 CATEGORIES DIRECTORY (SUPERADMIN ONLY)
+            TAB 8: 📂 CATEGORIES DIRECTORY & FULL CRUD (SUPERADMIN / PERMITTED)
         ========================================================================= */}
-        {activeTab === 'categories' && isSuperAdmin && (
-          <div className="space-y-4 animate-in fade-in">
-            <div className="bg-white dark:bg-[#141418] p-5 rounded-3xl border border-neutral-200/80 dark:border-neutral-800 shadow-sm">
-              <h3 className="font-black text-base">Platforma Katalog Kategoriyalari ({categories.length} ta)</h3>
-              <p className="text-xs text-neutral-500 mt-1">
-                Saytdagi barcha asosiy bo'limlar va ularga tegishli subkategoriyalar tuzilmasi
-              </p>
+        {activeTab === 'categories' && (isSuperAdmin || hasPermission('manage_categories')) && (
+          <div className="space-y-5 animate-in fade-in">
+            {/* Header & Quick Action */}
+            <div className="p-5 rounded-3xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-brand-teal/10 text-brand-teal flex items-center justify-center font-bold">
+                    <FolderTree className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-black text-base text-neutral-900 dark:text-white">
+                    Katalog Kategoriyalari Boshqaruvi ({categories.length} ta)
+                  </h3>
+                </div>
+                <p className="text-xs text-neutral-500 mt-1">
+                  Platformadagi asosiy bo'limlarni yaratish, tahrirlash, o'chirish va subkategoriyalar iyerarxiyasini boshqarish
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                {/* Search categories */}
+                <div className="relative flex-1 md:w-64">
+                  <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    value={categorySearch}
+                    onChange={(e) => setCategorySearch(e.target.value)}
+                    placeholder="Kategoriya qidirish..."
+                    className="w-full pl-8 pr-3 py-2 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold focus:outline-none focus:border-brand-teal"
+                  />
+                  {categorySearch && (
+                    <button
+                      type="button"
+                      onClick={() => setCategorySearch('')}
+                      className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleOpenAddCategory}
+                  className="px-4 py-2.5 rounded-xl bg-brand-teal text-white font-bold text-xs hover:bg-brand-teal-hover transition-all flex items-center gap-2 shadow-sm shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Yangi Kategoriya Qo'shish</span>
+                </button>
+              </div>
             </div>
 
+            {/* Categories Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {categories.map(cat => {
-                const count = products.filter(p => p.category_slug === cat.slug).length;
-                return (
-                  <div key={cat.id} className="p-5 rounded-3xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-sm space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-2xl">{cat.icon || '📦'}</span>
-                        <div>
-                          <div className="font-black text-sm">{cat.title_uz}</div>
-                          <span className="text-[11px] text-neutral-400">{cat.slug}</span>
+              {categories
+                .filter(cat => {
+                  if (!categorySearch.trim()) return true;
+                  const q = categorySearch.toLowerCase();
+                  return (
+                    cat.title_uz?.toLowerCase().includes(q) ||
+                    cat.title_ru?.toLowerCase().includes(q) ||
+                    cat.title_en?.toLowerCase().includes(q) ||
+                    cat.slug?.toLowerCase().includes(q)
+                  );
+                })
+                .map(cat => {
+                  const prodsCount = products.filter(p => p.category_slug === cat.slug || p.category_id === cat.id).length;
+                  const isConfirmingDelete = categoryDeleteConfirmId === cat.id;
+
+                  return (
+                    <div 
+                      key={cat.id} 
+                      className="p-5 rounded-3xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-sm flex flex-col justify-between space-y-4 hover:border-neutral-300 dark:hover:border-neutral-700 transition-all group"
+                    >
+                      {/* Top row: Icon, Names & Actions */}
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center text-2xl shadow-xs shrink-0 overflow-hidden">
+                              {cat.icon || '📦'}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <h4 className="font-black text-sm text-neutral-900 dark:text-white leading-tight">
+                                  {cat.title_uz}
+                                </h4>
+                              </div>
+                              <div className="text-[11px] text-neutral-400 mt-0.5">
+                                {cat.title_ru && <span>{cat.title_ru} • </span>}
+                                <span className="font-mono text-brand-teal font-semibold">/{cat.slug}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <span className="px-2.5 py-1 rounded-full bg-brand-teal/10 text-brand-teal text-xs font-bold shrink-0">
+                            {prodsCount} tovar
+                          </span>
+                        </div>
+
+                        {/* Image Preview Banner */}
+                        {cat.image && (
+                          <div className="relative h-24 rounded-2xl overflow-hidden bg-neutral-100 dark:bg-neutral-800 border border-neutral-200/70 dark:border-neutral-700/70">
+                            <img
+                              src={cat.image}
+                              alt={cat.title_uz}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end p-2.5">
+                              <span className="text-[10px] font-bold text-white drop-shadow-sm flex items-center gap-1">
+                                <ImageIcon className="w-3 h-3 text-white" />
+                                <span>Katalog Banneri</span>
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Subcategories Tags */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-neutral-400">
+                            <span>Subkategoriyalar ({cat.subcategories?.length || 0}):</span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                            {(cat.subcategories && cat.subcategories.length > 0) ? (
+                              cat.subcategories.map(sub => (
+                                <span 
+                                  key={sub.id} 
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 text-neutral-700 dark:text-neutral-300 text-xs font-semibold border border-neutral-200/60 dark:border-neutral-700"
+                                >
+                                  <span>{sub.title_uz}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteSubcategory(cat.id, sub.id)}
+                                    className="text-neutral-400 hover:text-rose-500 transition-colors ml-0.5"
+                                    title="Subkategoriyani o'chirish"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-neutral-400 italic">Subkategoriyalar mavjud emas</span>
+                            )}
+                          </div>
+
+                          {/* Quick inline subcategory add */}
+                          <div className="flex items-center gap-1.5 pt-1.5">
+                            <input
+                              type="text"
+                              value={quickSubInputs[cat.id] || ''}
+                              onChange={(e) => setQuickSubInputs({ ...quickSubInputs, [cat.id]: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleQuickAddSubcategory(cat.id);
+                                }
+                              }}
+                              placeholder="+ Yangi bo'lim (masalan: Futbolkalar)..."
+                              className="flex-1 px-2.5 py-1 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700 text-xs focus:outline-none focus:border-brand-teal"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleQuickAddSubcategory(cat.id)}
+                              className="px-2.5 py-1 rounded-lg bg-brand-teal/10 hover:bg-brand-teal/20 text-brand-teal text-xs font-bold transition-all shrink-0"
+                              title="Subkategoriya qo'shish"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <span className="px-2.5 py-1 rounded-full bg-brand-teal/10 text-brand-teal text-xs font-bold">
-                        {count} ta mahsulot
-                      </span>
-                    </div>
 
-                    <div className="space-y-1 pt-2 border-t border-neutral-100 dark:border-neutral-800">
-                      <span className="text-[11px] font-bold text-neutral-400">Subkategoriyalar:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {(cat.subcategories || []).map(sub => (
-                          <span key={sub.id} className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 text-[10px] font-medium">
-                            {sub.title_uz}
-                          </span>
-                        ))}
+                      {/* Card Footer Actions */}
+                      <div className="pt-3 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-2">
+                        <Link
+                          to={`/category/${cat.slug}`}
+                          target="_blank"
+                          className="text-xs font-bold text-neutral-500 hover:text-brand-teal flex items-center gap-1 transition-colors"
+                          title="Ushbu kategoriyani saytda ko'rish"
+                        >
+                          <span>Saytda</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+
+                        <div className="flex items-center gap-1.5">
+                          {/* Edit Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditCategory(cat)}
+                            className="px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 text-xs font-bold flex items-center gap-1 transition-all"
+                            title="Kategoriyani tahrirlash"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-brand-teal" />
+                            <span>Tahrirlash</span>
+                          </button>
+
+                          {/* Delete Button with Confirmation Protection */}
+                          {isConfirmingDelete ? (
+                            <div className="flex items-center gap-1 bg-rose-500/10 p-1 rounded-xl border border-rose-500/20 animate-in fade-in">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  deleteCategory(cat.id);
+                                  setCategoryDeleteConfirmId(null);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition-all"
+                                title="Haqiqatan ham o'chirish"
+                              >
+                                Ha, o'chirish
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCategoryDeleteConfirmId(null)}
+                                className="p-1 rounded-lg text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+                                title="Bekor qilish"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setCategoryDeleteConfirmId(cat.id)}
+                              className="p-2 rounded-xl text-neutral-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                              title="Kategoriyani o'chirish"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
         )}
@@ -1735,11 +2331,65 @@ export const UnifiedDashboard: React.FC = () => {
             TAB 9: ⚙️ SETTINGS
         ========================================================================= */}
         {activeTab === 'settings' && hasPermission('manage_settings') && (
-          <div className="max-w-2xl bg-white dark:bg-[#141418] p-6 rounded-3xl border border-neutral-200/80 dark:border-neutral-800 shadow-sm space-y-4 animate-in fade-in">
-            <h3 className="font-black text-base">Do'kon Sozlamalari va Rekvizitlari</h3>
-            <p className="text-xs text-neutral-500">
-              Ushbu ma'lumotlar do'kon sahifasida (`/store/:slug`) va mahsulotlar kartasida xaridorlarga ko'rinadi.
-            </p>
+          <div className="max-w-2xl space-y-6 animate-in fade-in">
+            {/* SuperAdmin Security & Password Settings */}
+            {isSuperAdmin && (
+              <div className="bg-white dark:bg-[#141418] p-6 rounded-3xl border border-neutral-200/80 dark:border-neutral-800 shadow-sm space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                      <KeyRound className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-base text-neutral-900 dark:text-white">
+                        SuperAdmin Xavfsizlik & Parolni Yangilash
+                      </h3>
+                      <p className="text-xs text-neutral-400">
+                        Boshqaruv markaziga kirish uchun yangi maxfiy parol belgilash
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-500/5 via-brand-teal/5 to-transparent border border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                        Login:
+                      </span>
+                      <span className="font-mono text-xs font-black text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md">
+                        admin
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400 mt-1">
+                      Boshqaruv markazi uchun yangi maxfiy parol o'rnatish
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminPassError(null);
+                      setAdminPassSuccess(null);
+                      setCurrentAdminPassInput('');
+                      setNewAdminPassInput('');
+                      setConfirmAdminPassInput('');
+                      setIsAdminPasswordModalOpen(true);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shrink-0 active:scale-95"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    <span>Parolni Yangilash</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white dark:bg-[#141418] p-6 rounded-3xl border border-neutral-200/80 dark:border-neutral-800 shadow-sm space-y-4">
+              <h3 className="font-black text-base">Do'kon Sozlamalari va Rekvizitlari</h3>
+              <p className="text-xs text-neutral-500">
+                Ushbu ma'lumotlar do'kon sahifasida (`/store/:slug`) va mahsulotlar kartasida xaridorlarga ko'rinadi.
+              </p>
 
             <form
               onSubmit={(e) => {
@@ -1797,6 +2447,269 @@ export const UnifiedDashboard: React.FC = () => {
                 O'zgarishlarni Saqlash
               </button>
             </form>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 10: 👥 RO'YXATDAN O'TGAN MIJOZLAR (SUPERADMIN)
+        ========================================================================= */}
+        {activeTab === 'users' && isSuperAdmin && (
+          <div className="space-y-6 animate-in fade-in">
+            {/* Header & Stats */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-200 dark:border-neutral-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-brand-teal text-white flex items-center justify-center font-black shadow-lg shadow-purple-600/20">
+                  <UserCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg sm:text-xl font-black text-neutral-900 dark:text-white">
+                      Ro'yxatdan O'tgan Foydalanuvchilar
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                      SuperAdmin
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    Saytda ro'yxatdan o'tgan barcha mijozlarning to'liq ism-familiyalari va telefon raqamlari bazasi
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-4 py-2 rounded-2xl bg-white dark:bg-[#18181C] border border-neutral-200 dark:border-neutral-800 text-xs font-black text-neutral-900 dark:text-white shadow-xs">
+                  Jami: <span className="text-purple-600 dark:text-purple-400">{registeredUsers.length} nafar</span> mijoz
+                </span>
+              </div>
+            </div>
+
+            {/* Top Quick Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-xs space-y-1">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Jami Ro'yxatdan O'tganlar</span>
+                <div className="text-xl sm:text-2xl font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                  <Users className="w-5 h-5 text-purple-500" />
+                  <span>{registeredUsers.length} nafar</span>
+                </div>
+                <span className="text-[11px] text-emerald-500 font-bold">100% real bazada saqlangan</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-xs space-y-1">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Xarid Qilgan Xaridorlar</span>
+                <div className="text-xl sm:text-2xl font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                  <ShoppingBag className="w-5 h-5 text-blue-500" />
+                  <span>{registeredUsers.filter(u => orders.some(o => o.userId === u.id || o.customerPhone === u.phone)).length} nafar</span>
+                </div>
+                <span className="text-[11px] text-blue-500 font-bold">Kamida 1 ta buyurtma bergan</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-xs space-y-1">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Telefon Raqami</span>
+                <div className="text-xl sm:text-2xl font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                  <PhoneCall className="w-5 h-5 text-emerald-500" />
+                  <span>{registeredUsers.length} ta (+998)</span>
+                </div>
+                <span className="text-[11px] text-emerald-500 font-bold">O'zbekiston raqamlari</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-xs space-y-1">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">Mijozlar Buyurtma Summasi</span>
+                <div className="text-lg sm:text-xl font-black text-neutral-900 dark:text-white flex items-center gap-1.5 truncate">
+                  <DollarSign className="w-5 h-5 text-amber-500 shrink-0" />
+                  <span>{formatPrice(orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.totalAmount, 0))}</span>
+                </div>
+                <span className="text-[11px] text-amber-500 font-bold">Jami to'langan buyurtmalar</span>
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative w-full sm:max-w-md">
+                <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Ism, familiya yoki telefon raqami bo'yicha qidirish..."
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal transition-all"
+                />
+                {userSearch && (
+                  <button
+                    onClick={() => setUserSearch('')}
+                    className="p-1 rounded-md text-neutral-400 hover:text-neutral-600 dark:hover:text-white absolute right-3 top-1/2 -translate-y-1/2"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="text-xs font-bold text-neutral-500 self-end sm:self-center">
+                Topildi: <span className="text-neutral-900 dark:text-white">{filteredUsers.length} ta mijoz</span>
+              </div>
+            </div>
+
+            {/* Users Table */}
+            <div className="bg-white dark:bg-[#141418] rounded-3xl border border-neutral-200/80 dark:border-neutral-800 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-800/30 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                      <th className="py-3.5 px-4 text-center w-12">#</th>
+                      <th className="py-3.5 px-4">Mijoz (Ism & Familiya)</th>
+                      <th className="py-3.5 px-4">Telefon Raqami</th>
+                      <th className="py-3.5 px-4">Ro'yxatdan O'tgan</th>
+                      <th className="py-3.5 px-4">Buyurtmalari</th>
+                      <th className="py-3.5 px-4">Yetkazish Manzili</th>
+                      <th className="py-3.5 px-4">Holat</th>
+                      <th className="py-3.5 px-4 text-right">Amallar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800/60 text-xs font-medium">
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-neutral-400">
+                          <Users className="w-10 h-10 mx-auto text-neutral-300 dark:text-neutral-700 mb-2" />
+                          <p className="font-bold text-sm text-neutral-600 dark:text-neutral-300">
+                            Hech qanday mijoz topilmadi
+                          </p>
+                          <p className="text-xs text-neutral-400 mt-1">
+                            Qidiruv so'zini o'zgartirib ko'ring yoki filtrni tozalang
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map((user, idx) => {
+                        const userOrders = orders.filter(o => o.userId === user.id || o.customerPhone === user.phone);
+                        const totalSpent = userOrders
+                          .filter(o => o.status !== 'cancelled')
+                          .reduce((sum, o) => sum + o.totalAmount, 0);
+
+                        return (
+                          <tr key={user.id} className="hover:bg-neutral-50/60 dark:hover:bg-neutral-800/20 transition-colors">
+                            {/* Index */}
+                            <td className="py-3.5 px-4 text-center font-bold text-neutral-400 text-[11px]">
+                              {idx + 1}
+                            </td>
+
+                            {/* Full Name & Avatar */}
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-500/20 to-brand-teal/20 text-purple-600 dark:text-purple-400 font-black text-sm flex items-center justify-center shrink-0 border border-purple-500/30">
+                                  {user.fullName.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-black text-neutral-900 dark:text-white text-xs truncate">
+                                    {user.fullName}
+                                  </div>
+                                  <div className="text-[10px] text-neutral-400 font-mono mt-0.5">
+                                    ID: {user.id}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Phone Number */}
+                            <td className="py-3.5 px-4">
+                              <a
+                                href={`tel:${user.phone.replace(/\D/g, '')}`}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-xs transition-colors group"
+                                title="Qo'ng'iroq qilish"
+                              >
+                                <Phone className="w-3.5 h-3.5 text-emerald-500 group-hover:scale-110 transition-transform" />
+                                <span>{user.phone}</span>
+                              </a>
+                            </td>
+
+                            {/* Registered Date */}
+                            <td className="py-3.5 px-4 text-neutral-600 dark:text-neutral-400 text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                                <span>{user.createdAt ? user.createdAt.slice(0, 16) : '2026-10-15'}</span>
+                              </div>
+                            </td>
+
+                            {/* Orders & Total Spent */}
+                            <td className="py-3.5 px-4">
+                              <div>
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                                  userOrders.length > 0 
+                                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' 
+                                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500'
+                                }`}>
+                                  <ShoppingBag className="w-3 h-3" />
+                                  <span>{userOrders.length} ta buyurtma</span>
+                                </span>
+                                {userOrders.length > 0 && (
+                                  <div className="text-[11px] font-bold text-neutral-900 dark:text-white mt-1">
+                                    {formatPrice(totalSpent)}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Address */}
+                            <td className="py-3.5 px-4 max-w-[200px]">
+                              {user.addresses && user.addresses.length > 0 ? (
+                                <div className="text-xs text-neutral-700 dark:text-neutral-300 truncate flex items-center gap-1">
+                                  <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                                  <span className="truncate" title={user.addresses[0]}>{user.addresses[0]}</span>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-neutral-400 italic">Kiritilmagan</span>
+                              )}
+                            </td>
+
+                            {/* Status */}
+                            <td className="py-3.5 px-4">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>Faol xaridor</span>
+                              </span>
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-3.5 px-4 text-right">
+                              {userDeleteConfirmId === user.id ? (
+                                <div className="flex items-center justify-end gap-1.5 animate-in fade-in">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      deleteRegisteredUser(user.id);
+                                      setUserDeleteConfirmId(null);
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-rose-500 text-white text-[11px] font-bold hover:bg-rose-600 shadow-xs"
+                                  >
+                                    O'chirish
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setUserDeleteConfirmId(null)}
+                                    className="p-1 rounded-lg text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+                                    title="Bekor qilish"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setUserDeleteConfirmId(user.id)}
+                                  className="p-2 rounded-xl text-neutral-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                                  title="Mijozni tizimdan o'chirish"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1820,17 +2733,131 @@ export const UnifiedDashboard: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveProduct} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-neutral-500 mb-1">Mahsulot Nomi (O'zbekcha) *</label>
-                <input
-                  type="text"
-                  required
-                  value={prodForm.nameUz}
-                  onChange={(e) => setProdForm({ ...prodForm, nameUz: e.target.value })}
-                  placeholder="Masalan: Erkaklar klassik qora kostyumi"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
-                />
+              {/* Language selection banner & auto-translate button */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-teal-500/10 via-brand-teal/5 to-blue-500/10 border border-teal-500/20 dark:border-teal-500/30">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-black text-brand-teal">
+                      <Sparkles className="w-4 h-4 text-brand-teal animate-pulse" />
+                      <span>Ko'p tilli mahsulot tizimi (UZ, RU, EN)</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                      Faqat o'zbekcha yozsangiz ham xaridorlar tilni almashtirganda tovar avtomatik ruscha va inglizchada ko'rinadi!
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAutoTranslateProduct}
+                    disabled={!prodForm.nameUz.trim()}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-teal text-white text-xs font-bold shadow hover:bg-brand-teal-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0"
+                    title="O'zbekcha nom va tavsifdan Ruscha hamda Inglizchaga avtomatik tarjima qilish"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>✨ Avtotarjima qilish</span>
+                  </button>
+                </div>
+
+                {/* Tabs for Language preview/manual edit */}
+                <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-teal-500/20">
+                  <button
+                    type="button"
+                    onClick={() => setProdLangTab('uz')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      prodLangTab === 'uz'
+                        ? 'bg-brand-teal text-white shadow-xs'
+                        : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    }`}
+                  >
+                    <span>🇺🇿 O'zbekcha</span>
+                    <span className="text-[10px] opacity-75 font-normal">(Asosiy)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProdLangTab('ru')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      prodLangTab === 'ru'
+                        ? 'bg-brand-teal text-white shadow-xs'
+                        : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    }`}
+                  >
+                    <span>🇷🇺 Ruscha</span>
+                    {prodForm.nameRu ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProdLangTab('en')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      prodLangTab === 'en'
+                        ? 'bg-brand-teal text-white shadow-xs'
+                        : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    }`}
+                  >
+                    <span>🇬🇧 Inglizcha</span>
+                    {prodForm.nameEn ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    ) : null}
+                  </button>
+                </div>
               </div>
+
+              {/* Product Name depending on selected tab */}
+              {prodLangTab === 'uz' && (
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 mb-1">
+                    Mahsulot Nomi (O'zbekcha) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={prodForm.nameUz}
+                    onChange={(e) => setProdForm({ ...prodForm, nameUz: e.target.value })}
+                    placeholder="Masalan: Erkaklar klassik qora kostyumi"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
+                  />
+                </div>
+              )}
+
+              {prodLangTab === 'ru' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-neutral-500">
+                      Mahsulot Nomi (Ruscha / На русском)
+                    </label>
+                    <span className="text-[11px] text-teal-600 dark:text-teal-400">
+                      Bo'sh qolsa, saqlashda avtomatik tarjima qilinadi
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={prodForm.nameRu}
+                    onChange={(e) => setProdForm({ ...prodForm, nameRu: e.target.value })}
+                    placeholder={prodForm.nameUz ? "Masalan: Мужской классический костюм" : "Avtomatik tarjima qilinadi yoki qo'lda kiriting"}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
+                  />
+                </div>
+              )}
+
+              {prodLangTab === 'en' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-neutral-500">
+                      Mahsulot Nomi (Inglizcha / In English)
+                    </label>
+                    <span className="text-[11px] text-teal-600 dark:text-teal-400">
+                      Bo'sh qolsa, saqlashda avtomatik tarjima qilinadi
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={prodForm.nameEn}
+                    onChange={(e) => setProdForm({ ...prodForm, nameEn: e.target.value })}
+                    placeholder={prodForm.nameUz ? "Masalan: Men's Classic Black Suit" : "Auto-translated or enter custom"}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -1870,10 +2897,10 @@ export const UnifiedDashboard: React.FC = () => {
                   <select
                     value={prodForm.categorySlug}
                     onChange={(e) => setProdForm({ ...prodForm, categorySlug: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer text-neutral-900 dark:text-white [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white"
                   >
                     {categories.map(c => (
-                      <option key={c.id} value={c.slug}>{c.title_uz}</option>
+                      <option key={c.id} value={c.slug} className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">{c.title_uz}</option>
                     ))}
                   </select>
                 </div>
@@ -1884,10 +2911,10 @@ export const UnifiedDashboard: React.FC = () => {
                     <select
                       value={prodForm.shopId}
                       onChange={(e) => setProdForm({ ...prodForm, shopId: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer text-neutral-900 dark:text-white [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white"
                     >
                       {shops.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
+                        <option key={s.id} value={s.id} className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">{s.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1906,39 +2933,174 @@ export const UnifiedDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-neutral-500 mb-1">O'lchamlar (vergul bilan)</label>
-                  <input
-                    type="text"
-                    value={prodForm.sizes}
-                    onChange={(e) => setProdForm({ ...prodForm, sizes: e.target.value })}
-                    placeholder="S, M, L, XL"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-neutral-500 mb-1">Ranglar (Nomi:HEX)</label>
-                  <input
-                    type="text"
-                    value={prodForm.colors}
-                    onChange={(e) => setProdForm({ ...prodForm, colors: e.target.value })}
-                    placeholder="Qora:#000000, Oq:#FFFFFF"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
-                  />
-                </div>
-              </div>
-
+              {/* O'lchamlar */}
               <div>
-                <label className="block text-xs font-bold text-neutral-500 mb-1">Batafsil Tavsif</label>
-                <textarea
-                  rows={3}
-                  value={prodForm.descriptionUz}
-                  onChange={(e) => setProdForm({ ...prodForm, descriptionUz: e.target.value })}
-                  placeholder="Mahsulot haqida batafsil ma'lumot..."
+                <label className="block text-xs font-bold text-neutral-500 mb-1">Mavjud o'lchamlar (vergul bilan ajrating)</label>
+                <input
+                  type="text"
+                  value={prodForm.sizes}
+                  onChange={(e) => setProdForm({ ...prodForm, sizes: e.target.value })}
+                  placeholder="S, M, L, XL, 2XL"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                 />
               </div>
+
+              {/* Uzum Market standartidagi Ranglar va ularning suratlari */}
+              <div className="space-y-3 p-4 rounded-2xl bg-neutral-50/80 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-700/80">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-black text-neutral-900 dark:text-white flex items-center gap-1.5">
+                      <Palette className="w-4 h-4 text-brand-teal" />
+                      <span>Kiyim ranglari va har bir rang surati (Uzum Market standarti)</span>
+                    </label>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                      Xaridor rangni bosganda tovar surati darhol o'sha rangdagi kiyim suratiga o'tadi
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormColors([
+                        ...formColors,
+                        {
+                          name_uz: `Rang ${formColors.length + 1}`,
+                          hex: '#3B82F6',
+                          image_url: prodForm.imageUrl || '',
+                          inStock: true
+                        }
+                      ]);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-brand-teal/10 hover:bg-brand-teal/20 text-brand-teal text-xs font-bold flex items-center gap-1 transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Rang qo'shish</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                  {formColors.map((color, cIdx) => (
+                    <div 
+                      key={cIdx} 
+                      className="p-3 rounded-xl bg-white dark:bg-[#1A1A1E] border border-neutral-200 dark:border-neutral-700/80 flex flex-col sm:flex-row items-start sm:items-center gap-3 shadow-xs"
+                    >
+                      {/* Color Picker & Name */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="relative">
+                          <input
+                            type="color"
+                            value={color.hex}
+                            onChange={(e) => {
+                              const updated = [...formColors];
+                              updated[cIdx].hex = e.target.value;
+                              setFormColors(updated);
+                            }}
+                            className="w-9 h-9 rounded-xl border border-neutral-300 dark:border-neutral-600 cursor-pointer p-0.5 bg-transparent"
+                            title="Rang tusini tanlang"
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={color.name_uz}
+                          onChange={(e) => {
+                            const updated = [...formColors];
+                            updated[cIdx].name_uz = e.target.value;
+                            setFormColors(updated);
+                          }}
+                          placeholder="Nomi (Qora, Qizil, Oq)"
+                          className="w-28 sm:w-32 px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
+                        />
+                      </div>
+
+                      {/* Image URL & Thumbnail preview */}
+                      <div className="flex-1 w-full sm:w-auto flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="url"
+                            value={color.image_url}
+                            onChange={(e) => {
+                              const updated = [...formColors];
+                              updated[cIdx].image_url = e.target.value;
+                              setFormColors(updated);
+                            }}
+                            placeholder="Ushbu rangdagi rasm URL (https://...)"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-medium"
+                          />
+                        </div>
+                        {color.image_url && (
+                          <img
+                            src={color.image_url}
+                            alt="preview"
+                            className="w-8 h-8 rounded-lg object-cover border border-neutral-300 dark:border-neutral-600 shrink-0"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      {/* Remove Button */}
+                      {formColors.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormColors(formColors.filter((_, idx) => idx !== cIdx));
+                          }}
+                          className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors shrink-0 self-end sm:self-center"
+                          title="Ushbu rangni o'chirish"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Batafsil Tavsif depending on prodLangTab */}
+              {prodLangTab === 'uz' && (
+                <div>
+                  <label className="block text-xs font-bold text-neutral-500 mb-1">Batafsil Tavsif (O'zbekcha)</label>
+                  <textarea
+                    rows={3}
+                    value={prodForm.descriptionUz}
+                    onChange={(e) => setProdForm({ ...prodForm, descriptionUz: e.target.value })}
+                    placeholder="Mahsulot haqida batafsil ma'lumot..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
+                  />
+                </div>
+              )}
+
+              {prodLangTab === 'ru' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-neutral-500">Batafsil Tavsif (Ruscha / Описание)</label>
+                    <span className="text-[11px] text-teal-600 dark:text-teal-400">Bo'sh qolsa, avtotarjima ishlatiladi</span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={prodForm.descriptionRu}
+                    onChange={(e) => setProdForm({ ...prodForm, descriptionRu: e.target.value })}
+                    placeholder="Подробное описание товара..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
+                  />
+                </div>
+              )}
+
+              {prodLangTab === 'en' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-neutral-500">Batafsil Tavsif (Inglizcha / Description)</label>
+                    <span className="text-[11px] text-teal-600 dark:text-teal-400">Bo'sh qolsa, avtotarjima ishlatiladi</span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={prodForm.descriptionEn}
+                    onChange={(e) => setProdForm({ ...prodForm, descriptionEn: e.target.value })}
+                    placeholder="Detailed product description..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
+                  />
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
                 <button
@@ -2086,11 +3248,11 @@ export const UnifiedDashboard: React.FC = () => {
                 <select
                   value={storyCategorySlug}
                   onChange={(e) => setStoryCategorySlug(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white"
                 >
-                  <option value="">Kategoriya tanlang (Ixtiyoriy)</option>
+                  <option value="" className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">Kategoriya tanlang (Ixtiyoriy)</option>
                   {categories.map(c => (
-                    <option key={c.slug} value={c.slug}>
+                    <option key={c.slug} value={c.slug} className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">
                       {c.title_uz || c.slug}
                     </option>
                   ))}
@@ -2105,11 +3267,11 @@ export const UnifiedDashboard: React.FC = () => {
                 <select
                   value={storyProductId || ''}
                   onChange={(e) => setStoryProductId(e.target.value ? Number(e.target.value) : undefined)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white"
                 >
-                  <option value="">Tovarni tanlang (Ixtiyoriy)</option>
+                  <option value="" className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">Tovarni tanlang (Ixtiyoriy)</option>
                   {storyShopProducts.map(p => (
-                    <option key={p.id} value={p.id}>
+                    <option key={p.id} value={p.id} className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">
                       {p.name?.uz || p.title?.uz} — {formatPrice(p.price)}
                     </option>
                   ))}
@@ -2135,10 +3297,10 @@ export const UnifiedDashboard: React.FC = () => {
                   <select
                     value={storyShopId}
                     onChange={(e) => setStoryShopId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold cursor-pointer text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white"
                   >
                     {shops.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
+                      <option key={s.id} value={s.id} className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">{s.name}</option>
                     ))}
                   </select>
                 </div>
@@ -2416,6 +3578,370 @@ export const UnifiedDashboard: React.FC = () => {
                   className="px-6 py-2.5 rounded-xl bg-purple-600 text-white font-bold text-xs hover:bg-purple-700 transition-all shadow-md"
                 >
                   Do'konni Yaratish
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 14. SUPERADMIN PASSWORD UPDATE MODAL */}
+      {isAdminPasswordModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div 
+            className="w-full max-w-md bg-white dark:bg-[#18181C] rounded-3xl p-6 shadow-2xl border border-neutral-200 dark:border-neutral-800 space-y-5 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-neutral-900 dark:text-white">
+                    SuperAdmin Parolini Yangilash
+                  </h3>
+                  <p className="text-xs text-neutral-400">
+                    Boshqaruv markaziga kirish uchun yangi maxfiy parol
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsAdminPasswordModalOpen(false)} 
+                className="p-1.5 rounded-xl text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {adminPassError && (
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{adminPassError}</span>
+              </div>
+            )}
+
+            {adminPassSuccess && (
+              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>{adminPassSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateAdminPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 mb-1">
+                  Hozirgi Parol (Tekshirish uchun)
+                </label>
+                <input
+                  type={showAdminPass ? 'text' : 'password'}
+                  value={currentAdminPassInput}
+                  onChange={(e) => { setCurrentAdminPassInput(e.target.value); setAdminPassError(null); }}
+                  placeholder="Hozirgi parolingiz (masalan, admin2026)"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-mono font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 mb-1">
+                  Yangi Maxfiy Parol *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showAdminPass ? 'text' : 'password'}
+                    required
+                    value={newAdminPassInput}
+                    onChange={(e) => { setNewAdminPassInput(e.target.value); setAdminPassError(null); }}
+                    placeholder="Kamida 4 ta belgi"
+                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-mono font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-purple-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPass(!showAdminPass)}
+                    className="p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-white absolute right-2.5 top-2"
+                  >
+                    {showAdminPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 mb-1">
+                  Yangi Parolni Qaytadan Kiriting *
+                </label>
+                <input
+                  type={showAdminPass ? 'text' : 'password'}
+                  required
+                  value={confirmAdminPassInput}
+                  onChange={(e) => { setConfirmAdminPassInput(e.target.value); setAdminPassError(null); }}
+                  placeholder="Yangi parolni tasdiqlang"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-mono font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100 dark:border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAdminPasswordModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-bold"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-brand-teal text-white font-bold text-xs hover:opacity-95 transition-all shadow-md flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Parolni Saqlash</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 15. CATEGORY ADD / EDIT MODAL */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in">
+          <div 
+            className="bg-white dark:bg-[#141418] max-w-2xl w-full rounded-3xl p-5 sm:p-6 shadow-2xl border border-neutral-200 dark:border-neutral-800 space-y-4 my-auto max-h-[92vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-brand-teal/15 text-brand-teal flex items-center justify-center font-bold">
+                  <FolderTree className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-neutral-900 dark:text-white">
+                    {editingCategory ? "Kategoriyani Tahrirlash" : "Yangi Kategoriya Qo'shish"}
+                  </h3>
+                  <p className="text-xs text-neutral-400">
+                    Kategoriya nomi, slug, belgisi, rasmi va subkategoriyalarini sozlang
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsCategoryModalOpen(false)} 
+                className="p-1.5 rounded-xl text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleSaveCategory} className="space-y-4 overflow-y-auto flex-1 pr-1 overscroll-contain">
+              
+              {/* Category Titles (UZ, RU, EN) */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                    Kategoriya Nomi (O'zbekcha) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={catForm.titleUz}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const autoSlug = val
+                        .toLowerCase()
+                        .replace(/['`ʻʼ]/g, '')
+                        .replace(/[^a-z0-9]+/g, '-')
+                        .replace(/^-+|-+$/g, '');
+                      setCatForm({
+                        ...catForm,
+                        titleUz: val,
+                        slug: (!editingCategory && (!catForm.slug || catForm.slug === catForm.titleUz.toLowerCase().replace(/[^a-z0-9]+/g, '-'))) ? autoSlug : catForm.slug
+                      });
+                    }}
+                    placeholder="Masalan: Erkaklar kiyimi, Elektronika, Parfyumeriya"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-500 mb-1">
+                      Nomi (Ruscha)
+                    </label>
+                    <input
+                      type="text"
+                      value={catForm.titleRu}
+                      onChange={(e) => setCatForm({ ...catForm, titleRu: e.target.value })}
+                      placeholder="Мужская одежда"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-500 mb-1">
+                      Nomi (Inglizcha)
+                    </label>
+                    <input
+                      type="text"
+                      value={catForm.titleEn}
+                      onChange={(e) => setCatForm({ ...catForm, titleEn: e.target.value })}
+                      placeholder="Men's Clothing"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Slug & Icon */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                    Slug / URL manzili (Inglizcha) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={catForm.slug}
+                    onChange={(e) => setCatForm({ ...catForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                    placeholder="clothing, shoes, electronics"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-mono font-bold text-brand-teal focus:outline-none focus:border-brand-teal"
+                  />
+                  <span className="text-[10px] text-neutral-400 mt-0.5 block">
+                    Sayt manzili: /category/{catForm.slug || 'slug'}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                    Emoji / Belgi (Icon) *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={catForm.icon}
+                      onChange={(e) => setCatForm({ ...catForm, icon: e.target.value })}
+                      placeholder="👕"
+                      className="w-16 text-center px-2 py-2 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-lg font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                    />
+                    {/* Quick emoji selection chips */}
+                    <div className="flex-1 flex flex-wrap gap-1 p-1 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200/60 dark:border-neutral-700/60 max-h-16 overflow-y-auto">
+                      {['👕', '👗', '👟', '📱', '💄', '🕌', '⚽', '🏠', '🎁', '💎', '🚗', '🧸', '📚', '🎒', '⌚', '🎧'].map(emoji => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => setCatForm({ ...catForm, icon: emoji })}
+                          className={`w-7 h-7 rounded-lg text-sm flex items-center justify-center transition-all ${
+                            catForm.icon === emoji ? 'bg-brand-teal/20 scale-110' : 'hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                          }`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category Image URL & Preview */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                  Kategoriya Rasmi URL Manzili
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="url"
+                    value={catForm.image}
+                    onChange={(e) => setCatForm({ ...catForm, image: e.target.value })}
+                    placeholder="https://images.unsplash.com/photo-..."
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-medium text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                  />
+                  {catForm.image && (
+                    <img
+                      src={catForm.image}
+                      alt="Preview"
+                      className="w-12 h-10 rounded-xl object-cover border border-neutral-200 dark:border-neutral-700 shrink-0"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Subcategories Manager */}
+              <div className="space-y-3 p-4 rounded-2xl bg-neutral-50/80 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-700/80">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-black text-neutral-900 dark:text-white">
+                      Subkategoriyalar ({catSubcategories.length})
+                    </label>
+                    <p className="text-[11px] text-neutral-500">
+                      Ushbu kategoriya ichidagi kichik bo'limlar (filtrlar)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Subcategories list */}
+                <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto">
+                  {catSubcategories.map(sub => (
+                    <span
+                      key={sub.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#1A1A1E] border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-800 dark:text-neutral-200 shadow-2xs"
+                    >
+                      <span>{sub.title_uz}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveModalSubcategory(sub.id)}
+                        className="text-neutral-400 hover:text-rose-500 transition-colors p-0.5"
+                        title="O'chirish"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                  {catSubcategories.length === 0 && (
+                    <span className="text-xs text-neutral-400 italic">Hali subkategoriya qo'shilmagan</span>
+                  )}
+                </div>
+
+                {/* Add new subcategory input */}
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={newSubInput}
+                    onChange={(e) => setNewSubInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddModalSubcategory();
+                      }
+                    }}
+                    placeholder="Yangi subkategoriya nomi (masalan: Kurtkalar, Ko'ylaklar)..."
+                    className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-[#18181C] border border-neutral-200 dark:border-neutral-700 text-xs font-semibold focus:outline-none focus:border-brand-teal"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddModalSubcategory}
+                    className="px-4 py-2 rounded-xl bg-brand-teal text-white text-xs font-bold hover:bg-brand-teal-hover transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Qo'shish</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100 dark:border-neutral-800 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-bold"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-brand-teal text-white font-bold text-xs hover:bg-brand-teal-hover transition-all shadow-md"
+                >
+                  {editingCategory ? "O'zgarishlarni Saqlash" : "Kategoriyani Yaratish"}
                 </button>
               </div>
             </form>

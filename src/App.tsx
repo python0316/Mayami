@@ -82,8 +82,8 @@ export const App: React.FC = () => {
         </Link>
       )}
 
-      {/* Uzum-style Mobile Bottom Navigation Bar (md:hidden) */}
-      {!isAuthScreen && <BottomNavigation />}
+      {/* Uzum-style Mobile Bottom Navigation Bar (md:hidden) - always visible on mobile */}
+      <BottomNavigation />
 
       {/* Global Marketplace Footer */}
       {!isAuthScreen && <Footer />}

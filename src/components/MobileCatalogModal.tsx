@@ -74,7 +74,7 @@ export const MobileCatalogModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-[#0A0A0A] text-neutral-900 dark:text-white animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-[#0A0A0A] text-neutral-900 dark:text-white pb-[calc(56px+env(safe-area-inset-bottom,6px))] md:pb-0 animate-in slide-in-from-bottom-4 duration-300">
       {/* Top Header */}
       <div className="px-4 py-3.5 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between bg-white dark:bg-[#121212] shrink-0">
         <div className="flex items-center gap-2">

@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { ColorOption, OrderStatus, Product } from '../types';
 import { Link } from 'react-router-dom';
+import { getLocalizedProductText, getLocalizedColorName } from '../utils/translator';
 
 const POPULAR_COLORS: ColorOption[] = [
   { name_uz: "Qora", name_ru: "Черный", name_en: "Black", hex: "#111111", inStock: true },
@@ -1255,7 +1256,7 @@ export const ShopPanel: React.FC = () => {
                             />
                             <div className="flex-1 min-w-0 text-xs space-y-0.5">
                               <div className="font-bold text-neutral-900 dark:text-white truncate">
-                                {item.product.name?.[language] || item.product.title?.[language] || item.product.title.uz}
+                                {getLocalizedProductText(item.product, 'name', language)}
                               </div>
                               <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
                                 <span>O'lcham: <strong className="text-neutral-700 dark:text-neutral-300">{item.selectedSize || 'Universal'}</strong></span>
@@ -1267,7 +1268,7 @@ export const ShopPanel: React.FC = () => {
                                       style={{ backgroundColor: item.selectedColor.hex }}
                                     />
                                     <strong className="text-neutral-700 dark:text-neutral-300">
-                                      {item.selectedColor[`name_${language}` as keyof typeof item.selectedColor] || item.selectedColor.name_uz}
+                                      {getLocalizedColorName(item.selectedColor, language)}
                                     </strong>
                                   </span>
                                 )}
@@ -1943,7 +1944,7 @@ export const ShopPanel: React.FC = () => {
                     )}
                   </div>
                   <h2 className="text-xl font-black text-neutral-900 dark:text-white leading-tight">
-                    {viewingProduct.name?.[language] || viewingProduct.title[language] || viewingProduct.title.uz}
+                    {getLocalizedProductText(viewingProduct, 'name', language)}
                   </h2>
                 </div>
 

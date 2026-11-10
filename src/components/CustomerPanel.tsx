@@ -18,6 +18,7 @@ import {
   Star
 } from 'lucide-react';
 import { ProductCard } from './ProductCard';
+import { getLocalizedProductText, getLocalizedColorName } from '../utils/translator';
 
 export const CustomerPanel: React.FC = () => {
   const navigate = useNavigate();
@@ -286,16 +287,24 @@ export const CustomerPanel: React.FC = () => {
                     >
                       <div className="flex items-center space-x-3">
                         <img
-                          src={it.product.image_url}
+                          src={it.selectedImage || it.selectedColor?.image_url || it.product.image_url}
                           alt=""
-                          className="w-12 h-12 rounded-lg object-cover border border-neutral-200 dark:border-neutral-700"
+                          className="w-12 h-12 rounded-lg object-cover border border-neutral-200 dark:border-neutral-700 shrink-0"
                         />
                         <div>
                           <div className="text-xs font-bold text-neutral-900 dark:text-white max-w-sm truncate">
-                            {it.product.title[language] || it.product.title.uz}
+                            {getLocalizedProductText(it.product, 'title', language)}
                           </div>
-                          <div className="text-[11px] text-neutral-400">
-                            Miqdor: {it.quantity} dona {it.selectedSize ? `• O'lcham: ${it.selectedSize}` : ''}
+                          <div className="text-[11px] text-neutral-400 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                            <span>Miqdor: {it.quantity} dona</span>
+                            {it.selectedSize && <span>• O'lcham: <b className="text-neutral-700 dark:text-neutral-300">{it.selectedSize}</b></span>}
+                            {it.selectedColor && (
+                              <span className="flex items-center gap-1">
+                                • Rang: 
+                                <span className="w-2.5 h-2.5 rounded-full inline-block border border-neutral-300 dark:border-neutral-600" style={{ backgroundColor: it.selectedColor.hex }} />
+                                <b className="text-neutral-700 dark:text-neutral-300">{getLocalizedColorName(it.selectedColor, language)}</b>
+                              </span>
+                            )}
                           </div>
                           {ord.status === 'delivered' ? (
                             <Link

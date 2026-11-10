@@ -94,7 +94,6 @@ export const AdminPortalPage: React.FC = () => {
                   required
                   value={username}
                   onChange={(e) => { setUsername(e.target.value); setErrorMessage(null); }}
-                  placeholder="admin yoki shop_vendor"
                   className="w-full pl-10 pr-4 py-3 rounded-xl bg-neutral-900/90 border border-neutral-700 text-white placeholder-neutral-500 text-xs font-bold focus:outline-none focus:border-brand-teal transition-all"
                 />
                 <User className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3.5" />

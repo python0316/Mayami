@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { ProductReviewsSection } from './ProductReviewsSection';
+import { getLocalizedProductText, getLocalizedColorName } from '../utils/translator';
 
 export const ProductDetailModal: React.FC = () => {
   const { 
@@ -56,25 +57,28 @@ export const ProductDetailModal: React.FC = () => {
   // Set defaults if not selected yet
   const currentSize = selectedSize || selectedProduct.sizes?.[0] || 'Standard';
   const currentColor = selectedColor || selectedProduct.colors?.[0];
-  const images = selectedProduct.images && selectedProduct.images.length > 0 
+  const rawImages = selectedProduct.images && selectedProduct.images.length > 0 
     ? selectedProduct.images 
     : [selectedProduct.image_url];
+  const colorImages = (selectedProduct.colors || []).map(c => c.image_url).filter(Boolean) as string[];
+  const images = Array.from(new Set([...rawImages, ...colorImages]));
   
   const shop = shops.find(s => s.id === selectedProduct.shopId) || shops[0];
   const inWishlist = isInWishlist(selectedProduct.id);
 
-  const productName = selectedProduct.name?.[language] || selectedProduct.short_title?.[language] || selectedProduct.title[language] || selectedProduct.slug;
-  const productTitle = selectedProduct.title[language] || '';
-  const description = selectedProduct.description[language] || selectedProduct.description.uz;
+  const productName = getLocalizedProductText(selectedProduct, 'name', language);
+  const productTitle = getLocalizedProductText(selectedProduct, 'title', language);
+  const description = getLocalizedProductText(selectedProduct, 'description', language);
+  const activeImage = images[selectedImageIndex] || currentColor?.image_url || selectedProduct.image_url;
 
   const handleAddToCart = () => {
-    addToCart(selectedProduct, quantity, currentSize, currentColor);
+    addToCart(selectedProduct, quantity, currentSize, currentColor, activeImage);
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 1500);
   };
 
   const handleBuyNow = () => {
-    addToCart(selectedProduct, quantity, currentSize, currentColor);
+    addToCart(selectedProduct, quantity, currentSize, currentColor, activeImage);
     setSelectedProduct(null);
     if (!currentUser) {
       setIsAuthModalOpen(true);
@@ -84,7 +88,7 @@ export const ProductDetailModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 bg-black/70 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 pb-[calc(70px+env(safe-area-inset-bottom,6px))] md:pb-6 bg-black/70 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
       <div 
         className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-white dark:bg-[#141414] rounded-3xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden my-auto"
         onClick={(e) => e.stopPropagation()}
@@ -237,7 +241,7 @@ export const ProductDetailModal: React.FC = () => {
                 <div className="mt-3">
                   <div className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5 flex items-center justify-between">
                     <span>
-                      {t.common.colors}: <span className="font-bold text-neutral-900 dark:text-white">{currentColor?.[`name_${language}` as keyof typeof currentColor] || currentColor?.name_uz}</span>
+                      {t.common.colors}: <span className="font-bold text-neutral-900 dark:text-white">{getLocalizedColorName(currentColor, language)}</span>
                     </span>
                     {currentColor?.inStock === false ? (
                       <span className="text-[10px] text-rose-500 font-bold bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full">
@@ -258,9 +262,14 @@ export const ProductDetailModal: React.FC = () => {
                           key={i}
                           onClick={() => {
                             setSelectedColor(c);
-                            if (c.image_url) {
-                              const foundIdx = images.indexOf(c.image_url);
-                              if (foundIdx !== -1) setSelectedImageIndex(foundIdx);
+                            const targetImg = c.image_url || images[i % images.length];
+                            if (targetImg) {
+                              const foundIdx = images.indexOf(targetImg);
+                              if (foundIdx !== -1) {
+                                setSelectedImageIndex(foundIdx);
+                              } else {
+                                setSelectedImageIndex(0);
+                              }
                             }
                           }}
                           className={`relative w-8 h-8 rounded-full border-2 transition-all p-0.5 flex items-center justify-center ${
@@ -268,7 +277,7 @@ export const ProductDetailModal: React.FC = () => {
                               ? 'border-brand-teal scale-110 shadow-md ring-2 ring-brand-teal/20' 
                               : 'border-neutral-300 dark:border-neutral-700 hover:border-neutral-400'
                           } ${isOutOfStock ? 'opacity-35 cursor-pointer' : ''}`}
-                          title={`${c[`name_${language}` as keyof typeof c] || c.name_uz} ${isOutOfStock ? "(Omborda tugagan)" : "(Mavjud)"}`}
+                          title={`${getLocalizedColorName(c, language)} ${isOutOfStock ? "(Omborda tugagan)" : "(Mavjud)"}`}
                         >
                           <div 
                             className="w-full h-full rounded-full relative overflow-hidden" 

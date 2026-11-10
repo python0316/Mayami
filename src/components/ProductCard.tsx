@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Product } from '../types';
+import { getLocalizedProductText } from '../utils/translator';
 import { Heart, Star, ShoppingBag, Check, Truck } from 'lucide-react';
 
 interface ProductCardProps {
@@ -30,8 +31,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [isAdded, setIsAdded] = useState(false);
   const inWishlist = isInWishlist(product.id);
 
-  const productName = product.name?.[language] || product.short_title?.[language] || product.title[language] || product.slug;
-  const productSubtitle = product.title[language] || '';
+  const productName = getLocalizedProductText(product, 'name', language);
+  const productSubtitle = getLocalizedProductText(product, 'title', language);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();

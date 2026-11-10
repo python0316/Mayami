@@ -17,10 +17,12 @@ export const BottomNavigation: React.FC = () => {
   const { 
     cartCount, 
     wishlist, 
+    isCartOpen,
     setIsCartOpen, 
     setIsAuthModalOpen, 
     isMobileCatalogOpen,
     setIsMobileCatalogOpen,
+    setSelectedProduct,
     currentUser, 
     adminSession,
     setSelectedCategorySlug,
@@ -31,45 +33,54 @@ export const BottomNavigation: React.FC = () => {
   } = useApp();
 
   const searchParams = new URLSearchParams(location.search);
-  const isHomeActive = location.pathname === '/' && !selectedCategorySlug && !searchQuery && !isMobileCatalogOpen;
-  const isCatalogActive = isMobileCatalogOpen || location.pathname.startsWith('/category');
-  const isWishlistActive = location.pathname === '/profile' && searchParams.get('tab') === 'wishlist';
-  const isProfileActive = (location.pathname === '/profile' && searchParams.get('tab') !== 'wishlist') || (!currentUser && !adminSession && false);
-  const isAdminActive = location.pathname === '/admin';
+  const isCartActive = isCartOpen;
+  const isCatalogActive = !isCartOpen && (isMobileCatalogOpen || location.pathname.startsWith('/category'));
+  const isWishlistActive = !isCartOpen && !isMobileCatalogOpen && location.pathname === '/profile' && searchParams.get('tab') === 'wishlist';
+  const isProfileActive = !isCartOpen && !isMobileCatalogOpen && location.pathname === '/profile' && searchParams.get('tab') !== 'wishlist';
+  const isAdminActive = !isCartOpen && !isMobileCatalogOpen && location.pathname === '/admin';
+  const isHomeActive = !isCartOpen && !isMobileCatalogOpen && !isWishlistActive && !isProfileActive && !isAdminActive && location.pathname === '/' && !selectedCategorySlug && !searchQuery;
 
   const handleHomeClick = () => {
     setSelectedCategorySlug(null);
     setSearchQuery('');
     setIsMobileCatalogOpen(false);
+    setIsCartOpen(false);
+    setSelectedProduct(null);
+    setIsAuthModalOpen(false);
     navigate('/');
   };
 
   const handleCatalogClick = () => {
+    setIsCartOpen(false);
+    setSelectedProduct(null);
+    setIsAuthModalOpen(false);
     setIsMobileCatalogOpen(!isMobileCatalogOpen);
   };
 
   const handleCartClick = () => {
     setIsMobileCatalogOpen(false);
-    setIsCartOpen(true);
+    setSelectedProduct(null);
+    setIsAuthModalOpen(false);
+    setIsCartOpen(!isCartOpen);
   };
 
   const handleWishlistClick = () => {
     setIsMobileCatalogOpen(false);
-    if (!currentUser) {
-      setIsAuthModalOpen(true);
-      return;
-    }
+    setIsCartOpen(false);
+    setSelectedProduct(null);
+    setIsAuthModalOpen(false);
     navigate('/profile?tab=wishlist');
   };
 
   const handleProfileClick = () => {
     setIsMobileCatalogOpen(false);
-    if (currentUser) {
-      navigate('/profile');
-    } else if (adminSession) {
+    setIsCartOpen(false);
+    setSelectedProduct(null);
+    setIsAuthModalOpen(false);
+    if (adminSession) {
       navigate('/admin');
     } else {
-      setIsAuthModalOpen(true);
+      navigate('/profile');
     }
   };
 
@@ -77,7 +88,7 @@ export const BottomNavigation: React.FC = () => {
   return (
     <nav 
       aria-label="Pastki navigatsiya"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#121214]/95 backdrop-blur-xl border-t border-neutral-200/90 dark:border-neutral-800/90 px-2 pt-1.5 pb-[max(6px,env(safe-area-inset-bottom))] shadow-[0_-4px_25px_rgba(0,0,0,0.08)] transition-colors select-none"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white/95 dark:bg-[#121214]/95 backdrop-blur-xl border-t border-neutral-200/90 dark:border-neutral-800/90 px-2 pt-1.5 pb-[max(6px,env(safe-area-inset-bottom))] shadow-[0_-4px_25px_rgba(0,0,0,0.08)] transition-colors select-none"
     >
       <div className="grid grid-cols-5 items-center justify-around max-w-lg mx-auto">
         {/* 1. Bosh sahifa */}
@@ -123,10 +134,17 @@ export const BottomNavigation: React.FC = () => {
         {/* 3. Savat */}
         <button
           onClick={handleCartClick}
-          className="flex flex-col items-center justify-center py-1 px-1 transition-all text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white group relative"
+          className={`flex flex-col items-center justify-center py-1 px-1 transition-all group relative ${
+            isCartActive
+              ? 'text-brand-teal font-extrabold'
+              : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+          }`}
         >
           <div className="relative">
-            <ShoppingBag className="w-5 h-5 transition-transform duration-200 group-hover:scale-105" />
+            <ShoppingBag className={`w-5 h-5 transition-transform duration-200 ${isCartActive ? 'scale-110 stroke-[2.5]' : 'group-hover:scale-105'}`} />
+            {isCartActive && (
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-brand-teal" />
+            )}
             {cartCount > 0 && (
               <span className="absolute -top-1.5 -right-2.5 px-1.5 h-4 min-w-[16px] rounded-full bg-brand-teal text-white text-[10px] font-black flex items-center justify-center shadow-md animate-pulse">
                 {cartCount > 99 ? '99+' : cartCount}
@@ -186,7 +204,10 @@ export const BottomNavigation: React.FC = () => {
                 {currentUser.fullName.trim().charAt(0).toUpperCase()}
               </div>
             ) : (
-              <User className="w-5 h-5 transition-transform duration-200 group-hover:scale-105" />
+              <User className={`w-5 h-5 transition-transform duration-200 ${isProfileActive ? 'scale-110 stroke-[2.5]' : 'group-hover:scale-105'}`} />
+            )}
+            {isProfileActive && !currentUser && (
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-brand-teal" />
             )}
             {adminSession && (
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-neutral-900" />

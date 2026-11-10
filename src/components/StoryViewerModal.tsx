@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { parseStoryMedia } from '../utils/mediaUtils';
+import { getLocalizedProductText } from '../utils/translator';
 import { 
   X, 
   ChevronLeft, 
@@ -496,7 +497,7 @@ export const StoryViewerModal: React.FC = () => {
               <div className="flex items-center space-x-3">
                 <img
                   src={linkedProduct.image_url}
-                  alt={linkedProduct.title[language] || linkedProduct.title.uz}
+                  alt={getLocalizedProductText(linkedProduct, 'title', language)}
                   className="w-12 h-12 rounded-xl object-cover border border-neutral-200 dark:border-neutral-700 shrink-0"
                 />
                 <div className="max-w-[150px] sm:max-w-[190px]">
@@ -504,7 +505,7 @@ export const StoryViewerModal: React.FC = () => {
                     Belgilangan mahsulot
                   </span>
                   <div className="text-xs font-bold truncate">
-                    {linkedProduct.name?.[language] || linkedProduct.short_title?.[language] || linkedProduct.title[language] || linkedProduct.title.uz}
+                    {getLocalizedProductText(linkedProduct, 'name', language)}
                   </div>
                   <div className="text-xs font-black text-brand-teal mt-0.5">
                     {formatPrice(linkedProduct.price)}

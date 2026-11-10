@@ -694,10 +694,10 @@ export const AdminPanel: React.FC = () => {
                   <select
                     value={formData.shopId}
                     onChange={(e) => setFormData({ ...formData, shopId: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal cursor-pointer font-semibold"
+                    className="w-full px-3 py-2 rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal cursor-pointer font-semibold [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white"
                   >
                     {shops.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
+                      <option key={s.id} value={s.id} className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">{s.name}</option>
                     ))}
                   </select>
                 </div>
@@ -709,10 +709,10 @@ export const AdminPanel: React.FC = () => {
                   <select
                     value={formData.categorySlug}
                     onChange={(e) => setFormData({ ...formData, categorySlug: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal cursor-pointer font-semibold"
+                    className="w-full px-3 py-2 rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal cursor-pointer font-semibold [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white"
                   >
                     {categories.map(cat => (
-                      <option key={cat.id} value={cat.slug}>
+                      <option key={cat.id} value={cat.slug} className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white py-1">
                         {cat[`title_${language}` as keyof typeof cat] as string || cat.title_uz}
                       </option>
                     ))}

@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { formatUzbekPhone, isCompleteUzbekPhone } from '../utils/phoneUtils';
+import { getLocalizedProductText, getLocalizedColorName } from '../utils/translator';
 
 export const CheckoutModal: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +28,7 @@ export const CheckoutModal: React.FC = () => {
     formatPrice,
     createOrder, 
     currentUser,
+    language,
     t 
   } = useApp();
 
@@ -129,7 +131,7 @@ export const CheckoutModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 pb-[calc(70px+env(safe-area-inset-bottom,6px))] md:pb-4 bg-black/70 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
       <div 
         className="relative w-full max-w-2xl max-h-[92vh] flex flex-col bg-white dark:bg-[#141414] rounded-3xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden my-auto"
         onClick={(e) => e.stopPropagation()}
@@ -341,7 +343,43 @@ export const CheckoutModal: React.FC = () => {
               </div>
             </div>
 
-            {/* 3. Summary & Submit */}
+            {/* 3. Products in this Order */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <ShoppingBag className="w-4 h-4 text-brand-teal" />
+                <span>Buyurtma qilinayotgan mahsulotlar ({cart.length})</span>
+              </h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {cart.map((item, idx) => {
+                  const title = getLocalizedProductText(item.product, 'name', language);
+                  const itemImg = item.selectedImage || item.selectedColor?.image_url || item.product.image_url;
+                  const colorName = getLocalizedColorName(item.selectedColor, language);
+                  return (
+                    <div key={idx} className="flex items-center gap-3 p-2 rounded-xl bg-neutral-50 dark:bg-[#1A1A1E] border border-neutral-200/70 dark:border-neutral-800">
+                      <img src={itemImg} alt={title} className="w-12 h-12 rounded-lg object-cover border border-neutral-200 dark:border-neutral-700 shrink-0" />
+                      <div className="flex-1 min-w-0 text-xs">
+                        <div className="font-semibold text-neutral-900 dark:text-white truncate">{title}</div>
+                        <div className="text-[11px] text-neutral-500 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                          {item.selectedSize && <span>O'lcham: <b className="text-neutral-700 dark:text-neutral-300">{item.selectedSize}</b></span>}
+                          {item.selectedColor && (
+                            <span className="flex items-center gap-1">
+                              Rang: <span className="w-2.5 h-2.5 rounded-full inline-block border border-neutral-300 dark:border-neutral-600" style={{ backgroundColor: item.selectedColor.hex }} />
+                              <b className="text-neutral-700 dark:text-neutral-300">{colorName}</b>
+                            </span>
+                          )}
+                          <span>× {item.quantity}</span>
+                        </div>
+                      </div>
+                      <div className="text-xs font-bold text-brand-teal shrink-0">
+                        {formatPrice(item.product.price * item.quantity)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 4. Summary & Submit */}
             <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-[#1A1A1E] border border-neutral-200 dark:border-neutral-800 space-y-2 text-xs">
               <div className="flex justify-between text-neutral-500">
                 <span>{t.cart.itemsTotal} ({cart.length} ta)</span>

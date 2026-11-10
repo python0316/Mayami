@@ -18,6 +18,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { ProductReviewsSection } from '../components/ProductReviewsSection';
+import { getLocalizedProductText, getLocalizedColorName } from '../utils/translator';
 
 export const ProductPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -47,30 +48,39 @@ export const ProductPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'desc' | 'specs' | 'reviews' | 'shop'>('desc');
   const [isAdded, setIsAdded] = useState(false);
 
+  const rawImages = product.images && product.images.length > 0 ? product.images : [product.image_url];
+  const colorImages = (product.colors || []).map(c => c.image_url).filter(Boolean) as string[];
+  const images = Array.from(new Set([...rawImages, ...colorImages]));
+
   useEffect(() => {
-    setSelectedImg(0);
     setSelectedSize(product.sizes?.[0] || 'Standard');
     const firstInStock = product.colors?.find(c => c.inStock !== false) || product.colors?.[0];
     setSelectedColor(firstInStock);
+    if (firstInStock?.image_url) {
+      const idx = images.indexOf(firstInStock.image_url);
+      setSelectedImg(idx !== -1 ? idx : 0);
+    } else {
+      setSelectedImg(0);
+    }
     setQuantity(1);
   }, [product.id]);
 
-  const images = product.images && product.images.length > 0 ? product.images : [product.image_url];
+  const activeImage = images[selectedImg] || selectedColor?.image_url || product.image_url;
   const inWishlist = isInWishlist(product.id);
 
-  const productName = product.name?.[language] || product.short_title?.[language] || product.title[language] || product.slug;
-  const productTitle = product.title[language] || '';
-  const description = product.description[language] || product.description.uz;
+  const productName = getLocalizedProductText(product, 'name', language);
+  const productTitle = getLocalizedProductText(product, 'title', language);
+  const description = getLocalizedProductText(product, 'description', language);
   const categoryTitle = category ? (category[`title_${language}` as keyof typeof category] as string || category.title_uz) : product.category_slug;
 
   const handleAddToCart = () => {
-    addToCart(product, quantity, selectedSize, selectedColor);
+    addToCart(product, quantity, selectedSize, selectedColor, activeImage);
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 1500);
   };
 
   const handleBuyNow = () => {
-    addToCart(product, quantity, selectedSize, selectedColor);
+    addToCart(product, quantity, selectedSize, selectedColor, activeImage);
     if (!currentUser) {
       setIsAuthModalOpen(true);
       return;
@@ -231,7 +241,7 @@ export const ProductPage: React.FC = () => {
             <div>
               <div className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-2 flex items-center justify-between">
                 <span>
-                  {t.common.colors}: <span className="font-bold text-neutral-900 dark:text-white">{selectedColor?.[`name_${language}` as keyof typeof selectedColor] || selectedColor?.name_uz}</span>
+                  {t.common.colors}: <span className="font-bold text-neutral-900 dark:text-white">{getLocalizedColorName(selectedColor, language)}</span>
                 </span>
                 {selectedColor?.inStock === false ? (
                   <span className="text-[10px] text-rose-500 font-bold bg-rose-50 dark:bg-rose-950/40 px-2.5 py-0.5 rounded-full">
@@ -262,7 +272,7 @@ export const ProductPage: React.FC = () => {
                           ? 'border-brand-teal scale-110 shadow-md ring-2 ring-brand-teal/20' 
                           : 'border-neutral-300 dark:border-neutral-700 hover:border-neutral-400'
                       } ${isOutOfStock ? 'opacity-35 cursor-pointer' : ''}`}
-                      title={`${c[`name_${language}` as keyof typeof c] || c.name_uz} ${isOutOfStock ? "(Omborda tugagan)" : "(Mavjud)"}`}
+                      title={`${getLocalizedColorName(c, language)} ${isOutOfStock ? "(Omborda tugagan)" : "(Mavjud)"}`}
                     >
                       <div 
                         className="w-full h-full rounded-full relative overflow-hidden" 

@@ -172,6 +172,7 @@ export interface CartItem {
   quantity: number;
   selectedSize?: string;
   selectedColor?: ColorOption;
+  selectedImage?: string;
 }
 
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
