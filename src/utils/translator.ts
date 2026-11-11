@@ -47,7 +47,47 @@ const PHRASE_DICTIONARY_RU: [RegExp, string][] = [
   [/\belektron\s+tasbeh\b/gi, 'электронные четки'],
   [/\bklassik\s+kostyum\b/gi, 'классический костюм'],
   [/\bcharm\s+kurtka\b/gi, 'кожаная куртка'],
-  [/\bjinsi\s+shim\b/gi, 'джинсовые брюки']
+  [/\bjinsi\s+shim\b/gi, 'джинсовые брюки'],
+  [/\bbatafsil\s+ma'lumot\b/gi, 'подробная информация'],
+  [/\brasmiy\s+kafolat\b/gi, 'официальная гарантия'],
+  [/\bkafolat\s+muddati\b/gi, 'гарантийный срок'],
+  [/\bbepul\s+yetkazib\s+berish\b/gi, 'бесплатная доставка'],
+  [/\btezkor\s+yetkazib\s+berish\b/gi, 'быстрая доставка'],
+  [/\bo'lchamlari\s+mavjud\b/gi, 'размеры в наличии'],
+  [/\bhar\s+kuni\s+kiyish\s+uchun\b/gi, 'для ежедневной носки'],
+  [/\bjuda\s+qulay\s+va\s+chidamli\b/gi, 'очень удобный и долговечный'],
+  [/\bsifatli\s+va\s+chidamli\b/gi, 'качественный и прочный'],
+  [/\bzamonaviy\s+dizayn\b/gi, 'современный дизайн'],
+  [/\basl\s+nusxa\b/gi, 'оригинальный товар'],
+  [/\boriginal\s+mahsulot\b/gi, 'оригинальный продукт'],
+  [/\bkiyish\s+uchun\s+qulay\b/gi, 'удобно носить'],
+  [/\btanaga\s+yoqimli\b/gi, 'приятный к телу'],
+  [/\brangi\s+o'chmaydi\b/gi, 'цвета не выцветают'],
+  [/\bcho'zilmaydi\b/gi, 'не растягивается'],
+  [/\bmatodan\s+tayyorlangan\b/gi, 'изготовлен из ткани'],
+  [/\btavsiya\s+etiladi\b/gi, 'рекомендуется'],
+  [/\beng\s+yaxshi\s+tanlov\b/gi, 'лучший выбор'],
+  [/\bxarid\s+uchun\b/gi, 'для покупки'],
+  [/\b100%\s+toza\s+paxta\b/gi, '100% чистый хлопок'],
+  [/\b100%\s+tabiiy\s+charm\b/gi, '100% натуральная кожа'],
+  [/\b100%\s+tabiiy\s+ipak\b/gi, '100% натуральный шелк'],
+  [/\btoza\s+paxtadan\s+tayyorlangan\b/gi, 'изготовлен из чистого хлопка'],
+  [/\btabiiy\s+charmdan\s+tayyorlangan\b/gi, 'изготовлен из натуральной кожи'],
+  [/\bpaxtadan\s+tayyorlangan\b/gi, 'изготовлен из хлопка'],
+  [/\bkiyish\s+uchun\s+juda\s+qulay\b/gi, 'очень удобный для носки'],
+  [/\bkiyishga\s+qulay\b/gi, 'удобно носить'],
+  [/\branglari\s+o'chmaydi\b/gi, 'цвета не выцветают'],
+  [/\byuvganda\s+rangi\s+o'chmaydi\b/gi, 'при стирке цвета не линяют'],
+  [/\bcho'zilmaydi\s+va\s+yirtilmaydi\b/gi, 'не растягивается и не рвется'],
+  [/\bbarcha\s+o'lchamlari\s+mavjud\b/gi, 'все размеры в наличии'],
+  [/\bbarcha\s+o'lchamlar\s+mavjud\b/gi, 'все размеры в наличии'],
+  [/\bhar\s+kuni\s+kiyish\s+uchun\s+mos\b/gi, 'подходит для ежедневной носки'],
+  [/\beng\s+yaxshi\s+narx\b/gi, 'лучшая цена'],
+  [/\bhamyonbop\s+narx(da)?\b/gi, 'по доступной цене'],
+  [/\byuqori\s+sifat\b/gi, 'высокое качество'],
+  [/\ba'lo\s+darajada\b/gi, 'на высшем уровне'],
+  [/\bo'zbekiston\s+bo'ylab\s+yetkazib\s+berish\b/gi, 'доставка по всему Узбекистану'],
+  [/\btez\s+va\s+bepul\s+yetkazib\s+berish\b/gi, 'быстрая и бесплатная доставка']
 ];
 
 const PHRASE_DICTIONARY_EN: [RegExp, string][] = [
@@ -89,7 +129,47 @@ const PHRASE_DICTIONARY_EN: [RegExp, string][] = [
   [/\belektron\s+tasbeh\b/gi, 'digital tasbih counter'],
   [/\bklassik\s+kostyum\b/gi, 'classic suit'],
   [/\bcharm\s+kurtka\b/gi, 'leather jacket'],
-  [/\bjinsi\s+shim\b/gi, 'jeans trousers']
+  [/\bjinsi\s+shim\b/gi, 'jeans trousers'],
+  [/\bbatafsil\s+ma'lumot\b/gi, 'detailed information'],
+  [/\brasmiy\s+kafolat\b/gi, 'official warranty'],
+  [/\bkafolat\s+muddati\b/gi, 'warranty period'],
+  [/\bbepul\s+yetkazib\s+berish\b/gi, 'free delivery'],
+  [/\btezkor\s+yetkazib\s+berish\b/gi, 'fast delivery'],
+  [/\bo'lchamlari\s+mavjud\b/gi, 'sizes in stock'],
+  [/\bhar\s+kuni\s+kiyish\s+uchun\b/gi, 'for daily wear'],
+  [/\bjuda\s+qulay\s+va\s+chidamli\b/gi, 'very comfortable and durable'],
+  [/\bsifatli\s+va\s+chidamli\b/gi, 'high quality and durable'],
+  [/\bzamonaviy\s+dizayn\b/gi, 'modern design'],
+  [/\basl\s+nusxa\b/gi, 'original product'],
+  [/\boriginal\s+mahsulot\b/gi, 'original product'],
+  [/\bkiyish\s+uchun\s+qulay\b/gi, 'comfortable to wear'],
+  [/\btanaga\s+yoqimli\b/gi, 'pleasant to touch'],
+  [/\brangi\s+o'chmaydi\b/gi, 'colors do not fade'],
+  [/\bcho'zilmaydi\b/gi, 'does not stretch'],
+  [/\bmatodan\s+tayyorlangan\b/gi, 'made of fabric'],
+  [/\btavsiya\s+etiladi\b/gi, 'recommended'],
+  [/\beng\s+yaxshi\s+tanlov\b/gi, 'best choice'],
+  [/\bxarid\s+uchun\b/gi, 'for purchase'],
+  [/\b100%\s+toza\s+paxta\b/gi, '100% pure cotton'],
+  [/\b100%\s+tabiiy\s+charm\b/gi, '100% genuine leather'],
+  [/\b100%\s+tabiiy\s+ipak\b/gi, '100% natural silk'],
+  [/\btoza\s+paxtadan\s+tayyorlangan\b/gi, 'made of pure cotton'],
+  [/\btabiiy\s+charmdan\s+tayyorlangan\b/gi, 'made of genuine leather'],
+  [/\bpaxtadan\s+tayyorlangan\b/gi, 'made of cotton'],
+  [/\bkiyish\s+uchun\s+juda\s+qulay\b/gi, 'very comfortable to wear'],
+  [/\bkiyishga\s+qulay\b/gi, 'comfortable to wear'],
+  [/\branglari\s+o'chmaydi\b/gi, 'colors do not fade'],
+  [/\byuvganda\s+rangi\s+o'chmaydi\b/gi, 'colors do not fade when washed'],
+  [/\bcho'zilmaydi\s+va\s+yirtilmaydi\b/gi, 'does not stretch or tear'],
+  [/\bbarcha\s+o'lchamlari\s+mavjud\b/gi, 'all sizes in stock'],
+  [/\bbarcha\s+o'lchamlar\s+mavjud\b/gi, 'all sizes in stock'],
+  [/\bhar\s+kuni\s+kiyish\s+uchun\s+mos\b/gi, 'suitable for daily wear'],
+  [/\beng\s+yaxshi\s+narx\b/gi, 'best price'],
+  [/\bhamyonbop\s+narx(da)?\b/gi, 'at an affordable price'],
+  [/\byuqori\s+sifat\b/gi, 'high quality'],
+  [/\ba'lo\s+darajada\b/gi, 'top quality'],
+  [/\bo'zbekiston\s+bo'ylab\s+yetkazib\s+berish\b/gi, 'delivery across Uzbekistan'],
+  [/\btez\s+va\s+bepul\s+yetkazib\s+berish\b/gi, 'fast and free delivery']
 ];
 
 // Single word mappings
@@ -266,7 +346,146 @@ const WORD_MAP_RU: Record<string, string> = {
   'bej': 'бежевый',
   'tillarang': 'золотистый',
   'kumushrang': 'серебристый',
-  'shaffof': 'прозрачный'
+  'shaffof': 'прозрачный',
+
+  // Marketplace & Description vocabulary
+  'mato': 'ткань',
+  'matosi': 'ткань',
+  'matodan': 'из ткани',
+  'tavsif': 'описание',
+  'tavsifi': 'описание',
+  'mahsulot': 'товар',
+  'mahsuloti': 'товар',
+  'mahsulotlar': 'товары',
+  'haqida': 'о товаре',
+  'uchun': 'для',
+  'juda': 'очень',
+  'chidamli': 'долговечный',
+  'foydalanish': 'использование',
+  'kafolat': 'гарантия',
+  'kafolati': 'гарантия',
+  'o\'lcham': 'размер',
+  'o\'lchami': 'размер',
+  'o\'lchamlari': 'размеры',
+  'rang': 'цвет',
+  'rangi': 'цвет',
+  'ranglari': 'цвета',
+  'yetkazib': 'доставка',
+  'berish': 'доставка',
+  'bepul': 'бесплатно',
+  'asl': 'подлинный',
+  'ishonchli': 'надежный',
+  'dizayn': 'дизайн',
+  'dizayni': 'дизайн',
+  'har': 'каждый',
+  'kuni': 'день',
+  'kiyish': 'носка',
+  'turli': 'различные',
+  'mavjud': 'в наличии',
+  'to\'plam': 'комплект',
+  'to\'plami': 'комплект',
+  'tarkibi': 'состав',
+  'ishlab': 'произведено',
+  'chiqarilgan': 'производство',
+  'arzon': 'доступный',
+  'chegirma': 'скидка',
+  'sovg\'a': 'подарок',
+  'xaridor': 'покупатель',
+  'xaridorlar': 'покупатели',
+  'tanlov': 'выбор',
+  'tanlovi': 'выбор',
+  'mos': 'подходящий',
+  'foydali': 'полезный',
+  'mukammal': 'идеальный',
+  'ajoyib': 'замечательный',
+  'chiroyli': 'красивый',
+  'toza': 'чистый',
+  'mustahkam': 'прочный',
+  'qulaylik': 'комфорт',
+  'yuvish': 'стирка',
+  'kiyimlar': 'одежда',
+  'poyabzallar': 'обувь',
+  'aksessuarlar': 'аксессуары',
+  'sotuvda': 'в продаже',
+  'buyurtma': 'заказ',
+  'barcha': 'все',
+  'fasl': 'сезон',
+  'mavsum': 'сезон',
+  'fasllar': 'сезоны',
+  'mavsumiy': 'сезонный',
+  'nafislik': 'изящество',
+  'zamonaviylik': 'современность',
+
+  // Conjunctions & Particles
+  'va': 'и',
+  'bilan': 'с',
+  'ham': 'также',
+  'esa': 'а',
+  'lekin': 'но',
+  'chunki': 'потому что',
+  'ushbu': 'этот',
+  'bu': 'это',
+  'hamma': 'все',
+  'faqat': 'только',
+  'yaxshi': 'хороший',
+  'a\'lo': 'отличный',
+  'kerak': 'необходимо',
+  'mumkin': 'можно',
+
+  // Common Verbs / Participles
+  'tayyorlangan': 'изготовлен',
+  'yaratilgan': 'создан',
+  'tikilgan': 'сшит',
+  'to\'qilgan': 'соткан',
+  'keladi': 'подходит',
+  'beradi': 'придает',
+  'ta\'minlaydi': 'обеспечивает',
+  'saqlaydi': 'сохраняет',
+  'yoqadi': 'нравится',
+  'o\'chmaydi': 'не выцветает',
+  'cho\'zilmaydi': 'не растягивается',
+  'yirtilmaydi': 'не рвется',
+  'kafolatlanadi': 'гарантируется',
+  'yetkaziladi': 'доставляется',
+  'sotiladi': 'продается',
+  'yuvganda': 'при стирке',
+  'kiyishda': 'при носке',
+  'kiyishga': 'для носки',
+  'ishlatishda': 'при использовании',
+
+  // Suffix roots & materials
+  'paxtadan': 'из хлопка',
+  'charmdan': 'из кожи',
+  'ipakdan': 'из шелка',
+  'jundan': 'из шерсти',
+  'baxmaldan': 'из бархата',
+  'hamyonbop': 'доступный',
+  'shinam': 'уютный',
+  'salqin': 'прохладный',
+  'elastik': 'эластичный',
+  'cho\'ziluvchan': 'стрейч',
+  'sirpanmaydigan': 'нескользящий',
+  'xavfsiz': 'безопасный',
+  'zararsiz': 'безвредный',
+  'brendli': 'фирменный',
+  'rasmiy': 'официальный',
+  'razmerlari': 'размеры',
+  'razmeri': 'размер',
+  'narxi': 'цена',
+  'narxlari': 'цены',
+  'fasoni': 'фасон',
+  'modeli': 'модель',
+  'donasi': 'штука',
+  'dona': 'штук',
+  'juft': 'пара',
+  'qadog\'i': 'упаковка',
+  'qadoq': 'упаковка',
+  'etiladi': 'рекомендуется',
+  'hadya': 'подарок',
+  'tanaga': 'к телу',
+  'badanga': 'к коже',
+  'oyoqqa': 'на ноги',
+  'qo\'lga': 'на руки'
 };
 
 const WORD_MAP_EN: Record<string, string> = {
@@ -442,7 +661,146 @@ const WORD_MAP_EN: Record<string, string> = {
   'bej': 'beige',
   'tillarang': 'golden',
   'kumushrang': 'silver',
-  'shaffof': 'transparent'
+  'shaffof': 'transparent',
+
+  // Marketplace & Description vocabulary
+  'mato': 'fabric',
+  'matosi': 'fabric',
+  'matodan': 'made of fabric',
+  'tavsif': 'description',
+  'tavsifi': 'description',
+  'mahsulot': 'product',
+  'mahsuloti': 'product',
+  'mahsulotlar': 'products',
+  'haqida': 'about the product',
+  'uchun': 'for',
+  'juda': 'very',
+  'chidamli': 'durable',
+  'foydalanish': 'usage',
+  'kafolat': 'warranty',
+  'kafolati': 'warranty',
+  'o\'lcham': 'size',
+  'o\'lchami': 'size',
+  'o\'lchamlari': 'sizes',
+  'rang': 'color',
+  'rangi': 'color',
+  'ranglari': 'colors',
+  'yetkazib': 'delivery',
+  'berish': 'delivery',
+  'bepul': 'free',
+  'asl': 'authentic',
+  'ishonchli': 'reliable',
+  'dizayn': 'design',
+  'dizayni': 'design',
+  'har': 'every',
+  'kuni': 'day',
+  'kiyish': 'wear',
+  'turli': 'various',
+  'mavjud': 'available in stock',
+  'to\'plam': 'set',
+  'to\'plami': 'set',
+  'tarkibi': 'composition',
+  'ishlab': 'manufacture',
+  'chiqarilgan': 'produced',
+  'arzon': 'affordable',
+  'chegirma': 'discount',
+  'sovg\'a': 'gift',
+  'xaridor': 'customer',
+  'xaridorlar': 'customers',
+  'tanlov': 'choice',
+  'tanlovi': 'choice',
+  'mos': 'suitable',
+  'foydali': 'useful',
+  'mukammal': 'perfect',
+  'ajoyib': 'wonderful',
+  'chiroyli': 'beautiful',
+  'toza': 'pure',
+  'mustahkam': 'sturdy',
+  'qulaylik': 'comfort',
+  'yuvish': 'washing',
+  'kiyimlar': 'clothing',
+  'poyabzallar': 'shoes',
+  'aksessuarlar': 'accessories',
+  'sotuvda': 'in stock',
+  'buyurtma': 'order',
+  'barcha': 'all',
+  'fasl': 'season',
+  'mavsum': 'season',
+  'fasllar': 'seasons',
+  'mavsumiy': 'seasonal',
+  'nafislik': 'elegance',
+  'zamonaviylik': 'modernity',
+
+  // Conjunctions & Particles
+  'va': 'and',
+  'bilan': 'with',
+  'ham': 'also',
+  'esa': 'while',
+  'lekin': 'but',
+  'chunki': 'because',
+  'ushbu': 'this',
+  'bu': 'this',
+  'hamma': 'all',
+  'faqat': 'only',
+  'yaxshi': 'good',
+  'a\'lo': 'excellent',
+  'kerak': 'required',
+  'mumkin': 'possible',
+
+  // Common Verbs / Participles
+  'tayyorlangan': 'crafted',
+  'yaratilgan': 'created',
+  'tikilgan': 'stitched',
+  'to\'qilgan': 'woven',
+  'keladi': 'fits',
+  'beradi': 'provides',
+  'ta\'minlaydi': 'ensures',
+  'saqlaydi': 'preserves',
+  'yoqadi': 'pleases',
+  'o\'chmaydi': 'does not fade',
+  'cho\'zilmaydi': 'does not stretch',
+  'yirtilmaydi': 'does not tear',
+  'kafolatlanadi': 'is guaranteed',
+  'yetkaziladi': 'is delivered',
+  'sotiladi': 'sold',
+  'yuvganda': 'when washing',
+  'kiyishda': 'when wearing',
+  'kiyishga': 'for wearing',
+  'ishlatishda': 'in use',
+
+  // Suffix roots & materials
+  'paxtadan': 'made of cotton',
+  'charmdan': 'made of leather',
+  'ipakdan': 'made of silk',
+  'jundan': 'made of wool',
+  'baxmaldan': 'made of velvet',
+  'hamyonbop': 'budget-friendly',
+  'shinam': 'cozy',
+  'salqin': 'cool',
+  'elastik': 'elastic',
+  'cho\'ziluvchan': 'stretch',
+  'sirpanmaydigan': 'non-slip',
+  'xavfsiz': 'safe',
+  'zararsiz': 'non-toxic',
+  'brendli': 'designer',
+  'rasmiy': 'official',
+  'razmerlari': 'sizes',
+  'razmeri': 'size',
+  'narxi': 'price',
+  'narxlari': 'prices',
+  'fasoni': 'cut',
+  'modeli': 'model',
+  'donasi': 'piece',
+  'dona': 'pieces',
+  'juft': 'pair',
+  'qadog\'i': 'package',
+  'qadoq': 'package',
+  'etiladi': 'is recommended',
+  'hadya': 'present',
+  'tanaga': 'to skin',
+  'badanga': 'to body',
+  'oyoqqa': 'for feet',
+  'qo\'lga': 'for hands'
 };
 
 const COLOR_NAMES: Record<string, { ru: string; en: string }> = {
@@ -493,13 +851,159 @@ function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+function translitCyrillicUzToLatin(str: string): string {
+  const cyrToLatMap: Record<string, string> = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'j', 'з': 'z',
+    'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+    'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'x', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'ъ': "'",
+    'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya', 'ў': "o'", 'қ': 'q', 'ғ': "g'", 'ҳ': 'h'
+  };
+  return str.split('').map(char => {
+    const lower = char.toLowerCase();
+    const mapped = cyrToLatMap[lower];
+    if (!mapped) return char;
+    return char === char.toUpperCase() ? mapped.charAt(0).toUpperCase() + mapped.slice(1) : mapped;
+  }).join('');
+}
+
+function translateSingleWordRu(rawWord: string): string {
+  const clean = rawWord.toLowerCase().replace(/[`'’‘´]/g, "'").trim();
+  if (!clean) return rawWord;
+  if (WORD_MAP_RU[clean]) return WORD_MAP_RU[clean];
+
+  // Suffix checks:
+  if (clean.endsWith('dan') || clean.endsWith('tan')) {
+    const stem = clean.slice(0, -3);
+    if (WORD_MAP_RU[stem]) return `из ${WORD_MAP_RU[stem]}`;
+  }
+  if (clean.endsWith('dagi')) {
+    const stem = clean.slice(0, -4);
+    if (WORD_MAP_RU[stem]) return `в ${WORD_MAP_RU[stem]}`;
+  }
+  if (clean.endsWith('da')) {
+    const stem = clean.slice(0, -2);
+    if (WORD_MAP_RU[stem]) return `в ${WORD_MAP_RU[stem]}`;
+  }
+  if (clean.endsWith('ga') || clean.endsWith('ka') || clean.endsWith('qa')) {
+    const stem = clean.slice(0, -2);
+    if (WORD_MAP_RU[stem]) return `для ${WORD_MAP_RU[stem]}`;
+  }
+  if (clean.endsWith('lari')) {
+    const stem = clean.slice(0, -4);
+    if (WORD_MAP_RU[stem]) return WORD_MAP_RU[stem];
+  }
+  if (clean.endsWith('lar')) {
+    const stem = clean.slice(0, -3);
+    if (WORD_MAP_RU[stem]) return WORD_MAP_RU[stem];
+  }
+  if (clean.endsWith('si')) {
+    const stem = clean.slice(0, -2);
+    if (WORD_MAP_RU[stem]) return WORD_MAP_RU[stem];
+  }
+  if (clean.endsWith('i') && clean.length > 3) {
+    const stem = clean.slice(0, -1);
+    if (WORD_MAP_RU[stem]) return WORD_MAP_RU[stem];
+  }
+  if (clean.endsWith('lik')) {
+    const stem = clean.slice(0, -3);
+    if (WORD_MAP_RU[stem]) return WORD_MAP_RU[stem];
+  }
+  if (clean.endsWith('li')) {
+    const stem = clean.slice(0, -2);
+    if (WORD_MAP_RU[stem]) return WORD_MAP_RU[stem];
+  }
+  if (clean.endsWith('siz')) {
+    const stem = clean.slice(0, -3);
+    if (WORD_MAP_RU[stem]) return `без ${WORD_MAP_RU[stem]}`;
+  }
+  if (clean.endsWith('maydi')) {
+    if (clean.startsWith("o'ch")) return 'не выцветает';
+    if (clean.startsWith("cho'zil")) return 'не растягивается';
+    if (clean.startsWith('yirtil')) return 'не рвется';
+    return 'не теряет форму';
+  }
+  if (clean.endsWith('langan') || clean.endsWith('ilgan') || clean.endsWith('lgan')) {
+    return 'изготовлен';
+  }
+
+  return rawWord;
+}
+
+function translateSingleWordEn(rawWord: string): string {
+  const clean = rawWord.toLowerCase().replace(/[`'’‘´]/g, "'").trim();
+  if (!clean) return rawWord;
+  if (WORD_MAP_EN[clean]) return WORD_MAP_EN[clean];
+
+  // Suffix checks:
+  if (clean.endsWith('dan') || clean.endsWith('tan')) {
+    const stem = clean.slice(0, -3);
+    if (WORD_MAP_EN[stem]) return `made of ${WORD_MAP_EN[stem]}`;
+  }
+  if (clean.endsWith('dagi')) {
+    const stem = clean.slice(0, -4);
+    if (WORD_MAP_EN[stem]) return `in ${WORD_MAP_EN[stem]}`;
+  }
+  if (clean.endsWith('da')) {
+    const stem = clean.slice(0, -2);
+    if (WORD_MAP_EN[stem]) return `in ${WORD_MAP_EN[stem]}`;
+  }
+  if (clean.endsWith('ga') || clean.endsWith('ka') || clean.endsWith('qa')) {
+    const stem = clean.slice(0, -2);
+    if (WORD_MAP_EN[stem]) return `for ${WORD_MAP_EN[stem]}`;
+  }
+  if (clean.endsWith('lari')) {
+    const stem = clean.slice(0, -4);
+    if (WORD_MAP_EN[stem]) return `${WORD_MAP_EN[stem]}s`;
+  }
+  if (clean.endsWith('lar')) {
+    const stem = clean.slice(0, -3);
+    if (WORD_MAP_EN[stem]) return `${WORD_MAP_EN[stem]}s`;
+  }
+  if (clean.endsWith('si')) {
+    const stem = clean.slice(0, -2);
+    if (WORD_MAP_EN[stem]) return WORD_MAP_EN[stem];
+  }
+  if (clean.endsWith('i') && clean.length > 3) {
+    const stem = clean.slice(0, -1);
+    if (WORD_MAP_EN[stem]) return WORD_MAP_EN[stem];
+  }
+  if (clean.endsWith('lik')) {
+    const stem = clean.slice(0, -3);
+    if (WORD_MAP_EN[stem]) return WORD_MAP_EN[stem];
+  }
+  if (clean.endsWith('li')) {
+    const stem = clean.slice(0, -2);
+    if (WORD_MAP_EN[stem]) return WORD_MAP_EN[stem];
+  }
+  if (clean.endsWith('siz')) {
+    const stem = clean.slice(0, -3);
+    if (WORD_MAP_EN[stem]) return `${WORD_MAP_EN[stem]}-free`;
+  }
+  if (clean.endsWith('maydi')) {
+    if (clean.startsWith("o'ch")) return 'does not fade';
+    if (clean.startsWith("cho'zil")) return 'does not stretch';
+    if (clean.startsWith('yirtil')) return 'does not tear';
+    return 'keeps shape';
+  }
+  if (clean.endsWith('langan') || clean.endsWith('ilgan') || clean.endsWith('lgan')) {
+    return 'crafted';
+  }
+
+  return rawWord;
+}
+
 /**
  * Intelligent Uzbek to Russian translation for marketplace titles and descriptions
  */
 export const translateUzToRu = (text: string): string => {
   if (!text || !text.trim()) return '';
 
-  let result = text.trim();
+  let normalized = text.trim().replace(/[`'’‘´]/g, "'");
+  if (/[ўқғҳ]/.test(normalized)) {
+    normalized = translitCyrillicUzToLatin(normalized);
+  }
+
+  let result = normalized;
 
   // 1. Apply multi-word phrases
   for (const [regex, replacement] of PHRASE_DICTIONARY_RU) {
@@ -510,10 +1014,10 @@ export const translateUzToRu = (text: string): string => {
   const words = result.split(/(\s+|[.,!?:;()\-]+)/);
   const translatedWords = words.map(chunk => {
     const clean = chunk.toLowerCase().trim();
-    if (!clean || !WORD_MAP_RU[clean]) return chunk;
+    if (!clean || /^[.,!?:;()\-]+$/.test(clean)) return chunk;
     const isFirstCap = chunk.charAt(0) === chunk.charAt(0).toUpperCase() && chunk.charAt(0).toLowerCase() !== chunk.charAt(0);
-    const translated = WORD_MAP_RU[clean];
-    return isFirstCap ? capitalize(translated) : translated;
+    const trans = translateSingleWordRu(chunk);
+    return isFirstCap ? capitalize(trans) : trans;
   });
 
   result = translatedWords.join('');
@@ -532,7 +1036,12 @@ export const translateUzToRu = (text: string): string => {
 export const translateUzToEn = (text: string): string => {
   if (!text || !text.trim()) return '';
 
-  let result = text.trim();
+  let normalized = text.trim().replace(/[`'’‘´]/g, "'");
+  if (/[ўқғҳ]/.test(normalized)) {
+    normalized = translitCyrillicUzToLatin(normalized);
+  }
+
+  let result = normalized;
 
   // 1. Apply multi-word phrases
   for (const [regex, replacement] of PHRASE_DICTIONARY_EN) {
@@ -543,10 +1052,10 @@ export const translateUzToEn = (text: string): string => {
   const words = result.split(/(\s+|[.,!?:;()\-]+)/);
   const translatedWords = words.map(chunk => {
     const clean = chunk.toLowerCase().trim();
-    if (!clean || !WORD_MAP_EN[clean]) return chunk;
+    if (!clean || /^[.,!?:;()\-]+$/.test(clean)) return chunk;
     const isFirstCap = chunk.charAt(0) === chunk.charAt(0).toUpperCase() && chunk.charAt(0).toLowerCase() !== chunk.charAt(0);
-    const translated = WORD_MAP_EN[clean];
-    return isFirstCap ? capitalize(translated) : translated;
+    const trans = translateSingleWordEn(chunk);
+    return isFirstCap ? capitalize(trans) : trans;
   });
 
   result = translatedWords.join('');
@@ -571,20 +1080,31 @@ export const autoTranslateProduct = (
   descRu: string;
   descEn: string;
 } => {
-  const cleanName = nameUz.trim();
-  const cleanDesc = descUz.trim();
+  const cleanName = nameUz ? nameUz.trim() : '';
+  const cleanDesc = descUz ? descUz.trim() : '';
 
-  const nameRu = translateUzToRu(cleanName);
-  const nameEn = translateUzToEn(cleanName);
+  const nameRu = cleanName ? translateUzToRu(cleanName) : '';
+  const nameEn = cleanName ? translateUzToEn(cleanName) : '';
 
   let descRu = cleanDesc ? translateUzToRu(cleanDesc) : '';
   let descEn = cleanDesc ? translateUzToEn(cleanDesc) : '';
 
-  if (!descRu || descRu === cleanDesc) {
-    descRu = `${nameRu || cleanName}. Высококачественный товар с официальной гарантией на платформе Mayami.`;
+  // If cleanDesc was provided but translation returned empty, use cleanDesc
+  if (cleanDesc && !descRu) {
+    descRu = cleanDesc;
   }
-  if (!descEn || descEn === cleanDesc) {
-    descEn = `${nameEn || cleanName}. Premium quality verified product with guarantee on Mayami platform.`;
+  if (cleanDesc && !descEn) {
+    descEn = cleanDesc;
+  }
+
+  // If no description was entered at all, generate verified official marketplace text
+  if (!cleanDesc) {
+    if (nameRu || cleanName) {
+      descRu = `${nameRu || cleanName}. Высококачественный сертифицированный товар с официальной гарантией на платформе Mayami.`;
+    }
+    if (nameEn || cleanName) {
+      descEn = `${nameEn || cleanName}. Premium certified quality product with official guarantee on Mayami platform.`;
+    }
   }
 
   return {

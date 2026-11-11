@@ -15,7 +15,8 @@ import {
   PermissionKey,
   AdminUser,
   ProductReview,
-  ReviewReply
+  ReviewReply,
+  Banner
 } from '../types';
 import { 
   initialProducts, 
@@ -26,12 +27,14 @@ import {
 import { initialReviews } from '../data/mockReviews';
 import { translations } from '../translations';
 import { formatUzbekPhone, getRawPhoneDigits, isCompleteUzbekPhone } from '../utils/phoneUtils';
-import { translateUzToRu, translateUzToEn, translateColorName } from '../utils/translator';
+import { translateUzToRu, translateUzToEn, translateColorName, autoTranslateProduct } from '../utils/translator';
+import { sanitizeBannerImageUrl, getBannerFallbackImage } from '../utils/mediaUtils';
 
 export const DEFAULT_VENDOR_PERMISSIONS: PermissionKey[] = [
   'manage_products',
   'manage_orders',
   'manage_stories',
+  'manage_banners',
   'manage_reviews',
   'view_analytics',
   'manage_settings'
@@ -41,6 +44,7 @@ export const ALL_PERMISSIONS: PermissionKey[] = [
   'manage_products',
   'manage_orders',
   'manage_stories',
+  'manage_banners',
   'manage_reviews',
   'manage_shops',
   'manage_users',
@@ -69,7 +73,11 @@ interface AppContextType {
   products: Product[];
   shops: Shop[];
   categories: Category[];
-  banners: typeof initialBanners;
+  banners: Banner[];
+  addBanner: (banner: Omit<Banner, 'id'>) => void;
+  updateBanner: (id: string, updates: Partial<Banner>) => void;
+  deleteBanner: (id: string) => void;
+  toggleBannerStatus: (id: string) => void;
   
   // Filtering & Navigation
   selectedCategorySlug: string | null;
@@ -100,6 +108,8 @@ interface AppContextType {
   logoutUser: () => void;
   updateCustomerProfile: (updates: Partial<CustomerUser>) => void;
   addCustomerAddress: (address: string) => void;
+  guestVisitorId: string;
+  clearGuestStories: () => void;
   
   // Unified Admin / Vendor Auth (Single Portal)
   adminSession: AdminUser | null;
@@ -262,21 +272,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Clean out any legacy mock data containing 886782204
+          const filtered = parsed.filter(u => !u.phone?.replace(/\D/g, '').includes('886782204') && u.id !== 'user_nodirbek');
+          return filtered;
+        }
       } catch (e) {
         console.error(e);
       }
     }
     return [
-      {
-        id: 'user_nodirbek',
-        fullName: 'Nodirbek Rustamov',
-        phone: '+998 (88) 678-22-04',
-        password: 'password123',
-        email: 'nodirbek@Mayami.uz',
-        addresses: ['Toshkent sh., Yunusobod 19, 12-uy', 'Chilonzor tumani, Bunyodkor 42'],
-        createdAt: '2026-10-15 11:20'
-      },
       {
         id: 'user_malika',
         fullName: 'Malika Karimova',
@@ -320,6 +325,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = prev.filter(u => u.id !== userId);
       try {
         localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+        localStorage.removeItem(`mall_user_viewed_stories_${userId}`);
+        localStorage.removeItem(`mall_user_cart_${userId}`);
+        localStorage.removeItem(`mall_user_wishlist_${userId}`);
       } catch (e) {}
       return updated;
     });
@@ -333,7 +341,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('mall_current_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const u = JSON.parse(saved);
+        if (u && (u.id === 'user_nodirbek' || (u.phone && u.phone.replace(/\D/g, '').includes('886782204')))) {
+          localStorage.removeItem('mall_current_user');
+          return null;
+        }
+        return u;
       } catch (e) {
         console.error(e);
       }
@@ -394,13 +407,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error(e);
       }
     }
+    const reanchorStories = (storiesList: Story[]): Story[] => {
+      return (storiesList || []).map((st, sIdx) => {
+        const createdMs = st.createdAt ? new Date(st.createdAt).getTime() : 0;
+        const isExpired = !st.createdAt || isNaN(createdMs) || (Date.now() - createdMs > 24 * 3600 * 1000);
+        const isDemo = /^story_\d+_\d+$/.test(st.id);
+        if (isDemo && isExpired) {
+          return {
+            ...st,
+            createdAt: new Date(Date.now() - (sIdx + 1) * 2 * 3600 * 1000).toISOString()
+          };
+        }
+        return st;
+      });
+    };
+
     const map = new Map<string, Shop>();
     (initialShops as unknown as Shop[]).forEach(s => {
       // Re-anchor demo stories to recent hours so active stories are visible on demo
-      const freshStories = (s.stories || []).map((st, sIdx) => ({
-        ...st,
-        createdAt: st.createdAt ? st.createdAt : new Date(Date.now() - (sIdx + 1) * 2 * 3600 * 1000).toISOString()
-      }));
+      const freshStories = reanchorStories(s.stories || []);
       map.set(s.id, {
         ...s,
         permissions: s.permissions || DEFAULT_VENDOR_PERMISSIONS,
@@ -411,10 +436,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (Array.isArray(loaded)) {
       loaded.forEach(s => {
         const existing = map.get(s.id);
+        const existingStories = existing?.stories || [];
+        const loadedStories = reanchorStories(s.stories || []);
+        // Combine newly added shop stories while keeping demo ones fresh
+        const mergedStories = loadedStories.length > 0 ? loadedStories : existingStories;
+
         map.set(s.id, {
           ...existing,
           ...s,
-          permissions: s.permissions || existing?.permissions || DEFAULT_VENDOR_PERMISSIONS
+          permissions: s.permissions || existing?.permissions || DEFAULT_VENDOR_PERMISSIONS,
+          stories: mergedStories
         });
       });
     }
@@ -426,7 +457,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       username: s.username || (s.slug ? s.slug.replace(/-/g, '_') + '_shop' : 'shop_vendor'),
       password: s.password || 'shop123',
       status: s.status || 'active',
-      phone: s.phone || '+998 88 678 22 04',
+      phone: s.phone || '',
       permissions: s.permissions || DEFAULT_VENDOR_PERMISSIONS
     }));
   });
@@ -454,7 +485,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         role: 'superadmin',
         permissions: ALL_PERMISSIONS,
         status: 'active',
-        phone: '+998 88 678 22 04'
+        phone: '+998 71 200 00 00'
       };
     }
     const savedShop = sessionStorage.getItem('mall_shop_auth');
@@ -523,7 +554,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         role: 'superadmin',
         permissions: ALL_PERMISSIONS,
         status: 'active',
-        phone: '+998 88 678 22 04'
+        phone: '+998 71 200 00 00'
       };
       setAdminSession(session);
       return { success: true, role: 'superadmin' };
@@ -1075,7 +1106,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
   };
-  const banners = initialBanners;
+  const normalizeBanner = (b: any, idx?: number): Banner => {
+    let grad = b.bg_gradient || '';
+    if (!grad || !grad.includes('to-transparent')) {
+      if (grad.includes('teal')) grad = 'from-teal-950/85 via-teal-950/40 to-transparent';
+      else if (grad.includes('cyan')) grad = 'from-cyan-950/85 via-cyan-950/40 to-transparent';
+      else if (grad.includes('indigo')) grad = 'from-indigo-950/85 via-indigo-950/40 to-transparent';
+      else if (grad.includes('rose')) grad = 'from-rose-950/85 via-rose-950/40 to-transparent';
+      else if (grad.includes('emerald')) grad = 'from-emerald-950/85 via-emerald-950/40 to-transparent';
+      else if (grad.includes('amber')) grad = 'from-amber-950/85 via-amber-950/40 to-transparent';
+      else grad = 'from-neutral-950/85 via-neutral-950/40 to-transparent';
+    }
+
+    const safeImage = (b.image && b.image.trim()) 
+      ? sanitizeBannerImageUrl(b.image.trim()) 
+      : getBannerFallbackImage(b.linkCategory, idx);
+
+    return {
+      ...b,
+      bg_gradient: grad,
+      isActive: b.isActive !== false,
+      image: safeImage
+    };
+  };
+
+  // Dynamic Banners State (Superadmin & Sellers can create, edit, delete, toggle)
+  const [banners, setBanners] = useState<Banner[]>(() => {
+    try {
+      const saved = localStorage.getItem('mayami_banners');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item, i) => normalizeBanner(item, i));
+        }
+      }
+    } catch (e) {}
+    return initialBanners.map((b, idx) => normalizeBanner({
+      ...b,
+      linkType: ((b as any).linkType || 'category') as 'category' | 'shop' | 'custom',
+      shopId: (b as any).shopId || (idx === 0 ? 'shop_1' : idx === 1 ? 'shop_2' : undefined),
+      createdBy: 'admin' as const,
+      createdByName: 'Mayami Admin'
+    }, idx));
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mayami_banners', JSON.stringify(banners));
+    } catch (e) {}
+  }, [banners]);
+
+  const addBanner = (bannerData: Omit<Banner, 'id'>) => {
+    const newBanner: Banner = {
+      ...bannerData,
+      id: `banner_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      isActive: bannerData.isActive !== undefined ? bannerData.isActive : true,
+      createdAt: new Date().toISOString()
+    };
+    setBanners(prev => [newBanner, ...prev]);
+  };
+
+  const updateBanner = (id: string, updates: Partial<Banner>) => {
+    setBanners(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
+  };
+
+  const deleteBanner = (id: string) => {
+    setBanners(prev => prev.filter(b => b.id !== id));
+  };
+
+  const toggleBannerStatus = (id: string) => {
+    setBanners(prev => prev.map(b => b.id === id ? { ...b, isActive: !b.isActive } : b));
+  };
 
   // Navigation & Filtering
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(null);
@@ -1096,9 +1197,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     storyIndex: 0
   });
 
-  // Viewed Stories State
-  const [viewedStoryIds, setViewedStoryIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('mall_viewed_stories');
+  // Unique persistent guest device / visitor ID (unique per client session/device)
+  const getGuestVisitorId = (): string => {
+    try {
+      let visitorId = localStorage.getItem('mall_guest_device_id');
+      if (!visitorId) {
+        const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
+        visitorId = `guest_${Date.now().toString(36)}_${rand}`;
+        localStorage.setItem('mall_guest_device_id', visitorId);
+      }
+      return visitorId;
+    } catch (e) {
+      return `guest_temp_${Date.now().toString(36)}`;
+    }
+  };
+
+  const resetGuestVisitorId = (): string => {
+    try {
+      const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const newId = `guest_${Date.now().toString(36)}_${rand}`;
+      localStorage.setItem('mall_guest_device_id', newId);
+      return newId;
+    } catch (e) {
+      return `guest_temp_${Date.now().toString(36)}`;
+    }
+  };
+
+  const [guestVisitorId, setGuestVisitorId] = useState<string>(() => getGuestVisitorId());
+
+  // Viewed Stories State - Isolated per customer user / unique guest device
+  const getUserStoriesKey = (userId?: string | null, guestId?: string): string => {
+    if (userId) return `mall_user_viewed_stories_${userId}`;
+    const gId = guestId || guestVisitorId || getGuestVisitorId();
+    return `mall_guest_viewed_stories_${gId}`;
+  };
+
+  const loadUserViewedStories = (userId?: string | null, guestId?: string): string[] => {
+    try {
+      // Clear legacy global caches where stories were shared across all users
+      localStorage.removeItem('mall_viewed_stories');
+      localStorage.removeItem('mall_viewed_stories_v2');
+      localStorage.removeItem('mall_guest_viewed_stories');
+    } catch (e) {}
+
+    const key = getUserStoriesKey(userId, guestId);
+    const saved = localStorage.getItem(key);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -1108,11 +1251,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
     return [];
+  };
+
+  const [viewedStoryIds, setViewedStoryIds] = useState<string[]>(() => {
+    try {
+      const savedUser = localStorage.getItem('mall_current_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed?.id) {
+          return loadUserViewedStories(parsed.id);
+        }
+      }
+    } catch (e) {}
+    return loadUserViewedStories(null, getGuestVisitorId());
   });
 
+  // Keep viewedStoryIds in sync with the logged-in user or active guest
   useEffect(() => {
-    localStorage.setItem('mall_viewed_stories', JSON.stringify(viewedStoryIds));
-  }, [viewedStoryIds]);
+    const userStories = loadUserViewedStories(currentUser?.id, guestVisitorId);
+    setViewedStoryIds(userStories);
+  }, [currentUser?.id, guestVisitorId]);
+
+  // Persist viewedStoryIds into current user's or guest's isolated storage
+  useEffect(() => {
+    try {
+      const key = getUserStoriesKey(currentUser?.id, guestVisitorId);
+      localStorage.setItem(key, JSON.stringify(viewedStoryIds));
+    } catch (e) {}
+  }, [viewedStoryIds, currentUser?.id, guestVisitorId]);
+
+  const clearGuestStories = () => {
+    try {
+      const key = getUserStoriesKey(currentUser?.id, guestVisitorId);
+      localStorage.removeItem(key);
+    } catch (e) {}
+    setViewedStoryIds([]);
+  };
 
   const incrementStoryViews = (shopId: string, storyId: string) => {
     setShops(prev =>
@@ -1132,26 +1306,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const markStoryAsViewed = (storyId: string, shopId?: string) => {
     if (!storyId) return;
+
+    // 1. Mark as viewed in local state (triggers re-render with gray ring)
     setViewedStoryIds(prev => {
       if (prev.includes(storyId)) return prev;
-      setShops(shopsList =>
-        shopsList.map(shop => {
-          if (!shopId || shop.id === shopId) {
-            const hasStory = (shop.stories || []).some(s => s.id === storyId);
-            if (hasStory) {
-              return {
-                ...shop,
-                stories: (shop.stories || []).map(st =>
-                  st.id === storyId ? { ...st, views: (st.views || 0) + 1 } : st
-                )
-              };
-            }
-          }
-          return shop;
-        })
-      );
-      return [...prev, storyId];
+      const updated = [...prev, storyId];
+      try {
+        const key = getUserStoriesKey(currentUser?.id, guestVisitorId);
+        localStorage.setItem(key, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
     });
+
+    // 2. Increment view count in shops list
+    setShops(shopsList =>
+      shopsList.map(shop => {
+        if (!shopId || shop.id === shopId) {
+          const hasStory = (shop.stories || []).some(s => s.id === storyId);
+          if (hasStory) {
+            return {
+              ...shop,
+              stories: (shop.stories || []).map(st =>
+                st.id === storyId ? { ...st, views: (st.views || 0) + 1 } : st
+              )
+            };
+          }
+        }
+        return shop;
+      })
+    );
   };
 
   const isStoryViewed = (storyId: string): boolean => {
@@ -1185,12 +1368,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Add story with 24h expiration timer
   const addStoryToShop = (shopId: string, newStoryData: Omit<Story, 'id' | 'createdAt' | 'views'>) => {
+    const newStoryId = `story_${shopId}_${Date.now()}`;
+    // Ensure newly added story is definitely marked UNVIEWED (colorful gradient active)
+    setViewedStoryIds(prev => prev.filter(id => id !== newStoryId));
+
     setShops(prev => {
       const updated = prev.map(shop => {
         if (shop.id === shopId) {
           const newStory: Story = {
             ...newStoryData,
-            id: `story_${shopId}_${Date.now()}`,
+            id: newStoryId,
             createdAt: new Date().toISOString(), // 24-hour expiration begins
             views: 0
           };
@@ -1235,7 +1422,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  // Cart (Persistent per user in localStorage, temporary for guests in sessionStorage)
+  // Cart (Persistent per user in localStorage, temporary for guests in localStorage scoped by guestVisitorId)
   const [cart, setCart] = useState<CartItem[]>(() => {
     const savedUserStr = localStorage.getItem('mall_current_user');
     if (savedUserStr) {
@@ -1247,9 +1434,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } catch (e) {}
     }
-    // Guest: only from sessionStorage!
+    // Guest: scoped by guestVisitorId
     try {
-      const gCart = sessionStorage.getItem('mall_guest_cart');
+      const gId = getGuestVisitorId();
+      const gCart = localStorage.getItem(`mall_guest_cart_${gId}`) || sessionStorage.getItem('mall_guest_cart');
       if (gCart) return JSON.parse(gCart);
     } catch (e) {}
     return [];
@@ -1259,9 +1447,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentUser) {
       localStorage.setItem(`mall_user_cart_${currentUser.id}`, JSON.stringify(cart));
     } else {
+      const gId = guestVisitorId || getGuestVisitorId();
+      localStorage.setItem(`mall_guest_cart_${gId}`, JSON.stringify(cart));
       sessionStorage.setItem('mall_guest_cart', JSON.stringify(cart));
     }
-  }, [cart, currentUser]);
+  }, [cart, currentUser, guestVisitorId]);
 
   const addToCart = (product: Product, quantity = 1, size?: string, color?: any, image?: string) => {
     const selectedImg = image || color?.image_url || product.image_url;
@@ -1318,7 +1508,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Wishlist (Persistent per user in localStorage, temporary for guests in sessionStorage)
+  // Wishlist (Persistent per user in localStorage, temporary for guests in localStorage scoped by guestVisitorId)
   const [wishlist, setWishlist] = useState<number[]>(() => {
     const savedUserStr = localStorage.getItem('mall_current_user');
     if (savedUserStr) {
@@ -1330,9 +1520,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } catch (e) {}
     }
-    // Guest: only from sessionStorage!
+    // Guest: scoped by guestVisitorId
     try {
-      const gWishlist = sessionStorage.getItem('mall_guest_wishlist');
+      const gId = getGuestVisitorId();
+      const gWishlist = localStorage.getItem(`mall_guest_wishlist_${gId}`) || sessionStorage.getItem('mall_guest_wishlist');
       if (gWishlist) return JSON.parse(gWishlist);
     } catch (e) {}
     return [];
@@ -1342,9 +1533,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentUser) {
       localStorage.setItem(`mall_user_wishlist_${currentUser.id}`, JSON.stringify(wishlist));
     } else {
+      const gId = guestVisitorId || getGuestVisitorId();
+      localStorage.setItem(`mall_guest_wishlist_${gId}`, JSON.stringify(wishlist));
       sessionStorage.setItem('mall_guest_wishlist', JSON.stringify(wishlist));
     }
-  }, [wishlist, currentUser]);
+  }, [wishlist, currentUser, guestVisitorId]);
 
   const toggleWishlist = (productId: number) => {
     setWishlist(prev =>
@@ -1354,21 +1547,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isInWishlist = (productId: number) => wishlist.includes(productId);
 
-  // Customer Session Activation (Merges guest cart/wishlist into user's profile)
+  // Customer Session Activation (Merges guest cart/wishlist/stories into user's profile)
   const activateCustomerSession = (user: CustomerUser) => {
     setCurrentUser(user);
     localStorage.setItem('mall_current_user', JSON.stringify(user));
 
-    // Load guest items if any
+    const gId = guestVisitorId || getGuestVisitorId();
+
+    // 1. Stories merge
+    let guestStories: string[] = [];
+    try {
+      const gs = localStorage.getItem(`mall_guest_viewed_stories_${gId}`);
+      if (gs) guestStories = JSON.parse(gs);
+    } catch (e) {}
+
+    let userStories: string[] = [];
+    try {
+      const us = localStorage.getItem(`mall_user_viewed_stories_${user.id}`);
+      if (us) userStories = JSON.parse(us);
+    } catch (e) {}
+
+    const mergedStories = Array.from(new Set([...userStories, ...guestStories]));
+    localStorage.setItem(`mall_user_viewed_stories_${user.id}`, JSON.stringify(mergedStories));
+    setViewedStoryIds(mergedStories);
+
+    // 2. Load guest items if any
     let guestCart: CartItem[] = [];
     try {
-      const g = sessionStorage.getItem('mall_guest_cart');
+      const g = localStorage.getItem(`mall_guest_cart_${gId}`) || sessionStorage.getItem('mall_guest_cart');
       if (g) guestCart = JSON.parse(g);
     } catch (e) {}
 
     let guestWishlist: number[] = [];
     try {
-      const g = sessionStorage.getItem('mall_guest_wishlist');
+      const g = localStorage.getItem(`mall_guest_wishlist_${gId}`) || sessionStorage.getItem('mall_guest_wishlist');
       if (g) guestWishlist = JSON.parse(g);
     } catch (e) {}
 
@@ -1403,11 +1615,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const mergedWishlist = Array.from(new Set([...userWishlist, ...guestWishlist]));
 
-    // Persist to user storage and clear guest session
+    // Persist to user storage and clear temporary guest session
     localStorage.setItem(`mall_user_cart_${user.id}`, JSON.stringify(mergedCart));
     localStorage.setItem(`mall_user_wishlist_${user.id}`, JSON.stringify(mergedWishlist));
-    sessionStorage.removeItem('mall_guest_cart');
-    sessionStorage.removeItem('mall_guest_wishlist');
+    try {
+      localStorage.removeItem(`mall_guest_cart_${gId}`);
+      localStorage.removeItem(`mall_guest_wishlist_${gId}`);
+      localStorage.removeItem(`mall_guest_viewed_stories_${gId}`);
+      sessionStorage.removeItem('mall_guest_cart');
+      sessionStorage.removeItem('mall_guest_wishlist');
+    } catch (e) {}
 
     setCart(mergedCart);
     setWishlist(mergedWishlist);
@@ -1477,8 +1694,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('mall_current_user');
     sessionStorage.removeItem('mall_guest_cart');
     sessionStorage.removeItem('mall_guest_wishlist');
+    
+    // Allocate a brand-new clean guest visitor ID so next guest session is 100% fresh & isolated
+    const newGuestId = resetGuestVisitorId();
+    setGuestVisitorId(newGuestId);
+
     setCart([]);
     setWishlist([]);
+    setViewedStoryIds([]);
   };
 
   const updateCustomerProfile = (updates: Partial<CustomerUser>) => {
@@ -1527,9 +1750,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalAmount: 245000,
         shippingFee: 0,
         status: "delivered" as OrderStatus,
-        customerName: "Nodirbek Rustamov",
-        customerPhone: "+998 88 678 22 04",
-        userId: "user_nodirbek",
+        customerName: "Azizbek Alimov",
+        customerPhone: "+998 90 123 45 67",
+        userId: "user_azizbek",
         region: "Toshkent shahar",
         address: "Yunusobod 19-mavze, 12-uy, 45-xonadon",
         paymentMethod: "payme",
@@ -1550,9 +1773,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalAmount: 185000,
         shippingFee: 0,
         status: "processing" as OrderStatus,
-        customerName: "Nodirbek Rustamov",
-        customerPhone: "+998 88 678 22 04",
-        userId: "user_nodirbek",
+        customerName: "Azizbek Alimov",
+        customerPhone: "+998 90 123 45 67",
+        userId: "user_azizbek",
         region: "Toshkent shahar",
         address: "Chilonzor tumani, Bunyodkor 42",
         paymentMethod: "click",
@@ -1575,7 +1798,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
       date: new Date().toISOString().replace('T', ' ').slice(0, 16),
       status: 'pending',
-      userId: currentUser?.id
+      userId: currentUser?.id,
+      guestVisitorId: currentUser ? undefined : (guestVisitorId || getGuestVisitorId())
     };
     setOrders(prev => {
       const updated = [newOrder, ...prev];
@@ -1604,10 +1828,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Product CRUD (Synchronous + Reactive LocalStorage Persistence)
   const addProduct = (newProd: Omit<Product, 'id' | 'slug'>) => {
     const id = Date.now();
+    const uzName = newProd.title?.uz || newProd.name?.uz || '';
+    const uzDesc = newProd.description?.uz || '';
+    const trans = autoTranslateProduct(uzName, uzDesc);
+
+    const localizedName = {
+      uz: uzName,
+      ru: (newProd.name?.ru && newProd.name.ru.trim() && newProd.name.ru !== uzName) ? newProd.name.ru : trans.nameRu,
+      en: (newProd.name?.en && newProd.name.en.trim() && newProd.name.en !== uzName) ? newProd.name.en : trans.nameEn
+    };
+    const localizedTitle = {
+      uz: newProd.title?.uz || uzName,
+      ru: (newProd.title?.ru && newProd.title.ru.trim() && newProd.title.ru !== uzName) ? newProd.title.ru : trans.nameRu,
+      en: (newProd.title?.en && newProd.title.en.trim() && newProd.title.en !== uzName) ? newProd.title.en : trans.nameEn
+    };
+    const localizedDesc = {
+      uz: uzDesc || `${uzName}. Mayami platformasidagi rasmiy kafolatlangan tovar.`,
+      ru: (newProd.description?.ru && newProd.description.ru.trim() && newProd.description.ru !== uzDesc) ? newProd.description.ru : trans.descRu,
+      en: (newProd.description?.en && newProd.description.en.trim() && newProd.description.en !== uzDesc) ? newProd.description.en : trans.descEn
+    };
+
     const product: Product = {
       ...newProd,
       id,
-      slug: (newProd.title?.uz || newProd.name?.uz || 'product')
+      name: localizedName,
+      title: localizedTitle,
+      description: localizedDesc,
+      slug: (uzName || 'product')
         .toLowerCase()
         .replace(/\s+/g, '-')
         .replace(/[^a-z0-9-]/g, '') + `-${id.toString().slice(-4)}`
@@ -1624,8 +1871,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateProduct = (updated: Product) => {
+    const uzName = updated.title?.uz || updated.name?.uz || '';
+    const uzDesc = updated.description?.uz || '';
+    const trans = autoTranslateProduct(uzName, uzDesc);
+
+    const finalizedProd: Product = {
+      ...updated,
+      name: {
+        uz: uzName,
+        ru: (updated.name?.ru && updated.name.ru.trim() && updated.name.ru !== uzName) ? updated.name.ru : trans.nameRu,
+        en: (updated.name?.en && updated.name.en.trim() && updated.name.en !== uzName) ? updated.name.en : trans.nameEn
+      },
+      title: {
+        uz: updated.title?.uz || uzName,
+        ru: (updated.title?.ru && updated.title.ru.trim() && updated.title.ru !== uzName) ? updated.title.ru : trans.nameRu,
+        en: (updated.title?.en && updated.title.en.trim() && updated.title.en !== uzName) ? updated.title.en : trans.nameEn
+      },
+      description: {
+        uz: uzDesc || `${uzName}. Mayami platformasidagi rasmiy kafolatlangan tovar.`,
+        ru: (updated.description?.ru && updated.description.ru.trim() && updated.description.ru !== uzDesc) ? updated.description.ru : trans.descRu,
+        en: (updated.description?.en && updated.description.en.trim() && updated.description.en !== uzDesc) ? updated.description.en : trans.descEn
+      }
+    };
+
     setProducts(prev => {
-      const list = prev.map(p => (p.id === updated.id ? updated : p));
+      const list = prev.map(p => (p.id === finalizedProd.id ? finalizedProd : p));
       try {
         localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(list));
       } catch (e) {
@@ -1726,7 +1996,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       category_slugs: shopData.category_slugs,
       followersCount: 10,
       responseTime: '10 min',
-      phone: shopData.phone || '+998 88 678 22 04',
+      phone: shopData.phone || '',
       address: shopData.address || 'Toshkent shahar',
       stories: [],
       permissions: shopData.permissions || DEFAULT_VENDOR_PERMISSIONS
@@ -1758,6 +2028,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         shops,
         categories,
         banners,
+        addBanner,
+        updateBanner,
+        deleteBanner,
+        toggleBannerStatus,
         selectedCategorySlug,
         setSelectedCategorySlug,
         searchQuery,
@@ -1780,6 +2054,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginUser,
         registerUser,
         logoutUser,
+        guestVisitorId,
+        clearGuestStories,
         updateCustomerProfile,
         addCustomerAddress,
         

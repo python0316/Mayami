@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   X, 
@@ -33,6 +33,17 @@ export const AuthModal: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Guarantee empty and clean inputs whenever modal is opened
+  useEffect(() => {
+    if (isAuthModalOpen) {
+      setPhone('+998 ');
+      setFullName('');
+      setPassword('');
+      setError(null);
+      setSuccess(null);
+    }
+  }, [isAuthModalOpen]);
 
   if (!isAuthModalOpen) return null;
 
@@ -102,6 +113,8 @@ export const AuthModal: React.FC = () => {
     setTab(newTab);
     setError(null);
     setPassword('');
+    setPhone('+998 ');
+    setFullName('');
   };
 
   return (
@@ -214,7 +227,7 @@ export const AuthModal: React.FC = () => {
                     required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Masalan: Nodirbek Rustamov"
+                    placeholder="Masalan: Azizbek Alimov"
                     className="w-full pl-10 pr-3 py-3 rounded-xl bg-neutral-50 dark:bg-[#1E1E22] border border-neutral-200 dark:border-neutral-700 text-xs text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal font-medium"
                   />
                 </div>
@@ -235,6 +248,7 @@ export const AuthModal: React.FC = () => {
                 <input
                   type="tel"
                   required
+                  autoComplete="off"
                   value={phone}
                   onChange={handlePhoneChange}
                   placeholder="+998 (90) 123-45-67"

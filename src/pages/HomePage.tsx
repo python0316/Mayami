@@ -81,12 +81,12 @@ export const HomePage: React.FC = () => {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-transparent text-neutral-800 dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
+                className="bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-bold focus:outline-none cursor-pointer [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-900 dark:[&>option]:text-white"
               >
-                <option value="popular">{t.common.sortPopular}</option>
-                <option value="price_asc">{t.common.sortPriceAsc}</option>
-                <option value="price_desc">{t.common.sortPriceDesc}</option>
-                <option value="rating">{t.common.sortRating}</option>
+                <option value="popular" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-white font-bold">{t.common.sortPopular}</option>
+                <option value="price_asc" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-white font-bold">{t.common.sortPriceAsc}</option>
+                <option value="price_desc" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-white font-bold">{t.common.sortPriceDesc}</option>
+                <option value="rating" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-white font-bold">{t.common.sortRating}</option>
               </select>
             </div>
           </div>

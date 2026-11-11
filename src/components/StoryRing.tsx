@@ -52,7 +52,14 @@ export const StoryRing: React.FC<StoryRingProps> = ({
         >
           <defs>
             {/* Vivid Telegram-style gradient for UNSEEN stories */}
-            <linearGradient id={`story-grad-${gradId}`} x1="0%" y1="100%" x2="100%" y2="0%">
+            <linearGradient
+              id={`story-grad-${gradId}`}
+              gradientUnits="userSpaceOnUse"
+              x1="0"
+              y1="100"
+              x2="100"
+              y2="0"
+            >
               <stop offset="0%" stopColor="#00A896" />
               <stop offset="35%" stopColor="#0EA5E9" />
               <stop offset="70%" stopColor="#8B5CF6" />
@@ -62,7 +69,7 @@ export const StoryRing: React.FC<StoryRingProps> = ({
 
           {total === 1 ? (
             (() => {
-              const viewed = isStoryViewed(stories[0].id);
+              const viewed = stories[0]?.id ? isStoryViewed(stories[0].id) : false;
               return (
                 <circle
                   cx={cx}
@@ -77,7 +84,7 @@ export const StoryRing: React.FC<StoryRingProps> = ({
             })()
           ) : (
             stories.map((story, i) => {
-              const viewed = isStoryViewed(story.id);
+              const viewed = story?.id ? isStoryViewed(story.id) : false;
 
               // Angles starting at 12 o'clock (-90 deg)
               const startAngle = -90 + i * segmentDeg + gapDeg / 2;

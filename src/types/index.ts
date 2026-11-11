@@ -7,6 +7,7 @@ export type PermissionKey =
   | 'manage_products'    // Mahsulotlar qo'shish, tahrirlash, o'chirish
   | 'manage_orders'      // Buyurtmalarni qabul qilish va holatini o'zgartirish
   | 'manage_stories'     // 24 soatlik Stories (hikoyalar) joylash
+  | 'manage_banners'     // Bosh sahifa katta reklamalari va bannerlari
   | 'manage_reviews'     // Sharhlarni o'qish va munosabat (javob) bildirish
   | 'manage_shops'       // Do'konlarni boshqarish (SuperAdmin)
   | 'manage_users'       // Rollar va sotuvchilar login/parolini boshqarish (SuperAdmin)
@@ -159,12 +160,19 @@ export interface Banner {
   cta_uz: string;
   cta_ru: string;
   cta_en: string;
-  bg_gradient: string;
+  bg_gradient?: string;
   image: string;
   badge_uz: string;
   badge_ru: string;
   badge_en: string;
-  linkCategory: string;
+  linkCategory?: string;
+  linkType?: 'category' | 'shop' | 'custom';
+  shopId?: string; // If associated with a specific shop
+  customUrl?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  createdBy?: 'admin' | 'vendor';
+  createdByName?: string;
 }
 
 export interface CartItem {
@@ -180,6 +188,7 @@ export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | '
 export interface Order {
   id: string;
   userId?: string;
+  guestVisitorId?: string;
   date: string;
   items: CartItem[];
   totalAmount: number;
@@ -201,4 +210,5 @@ export interface CustomerUser {
   email?: string;
   addresses: string[];
   createdAt?: string;
+  avatar?: string;
 }

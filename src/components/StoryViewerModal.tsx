@@ -88,15 +88,15 @@ export const StoryViewerModal: React.FC = () => {
     return { exactTime, relative, remaining };
   };
 
-  // Mark viewed & increment view counter when opening or switching story
+  // Mark viewed & increment view counter ONLY when story viewer is ACTUALLY OPEN
   useEffect(() => {
+    if (!storyViewer.isOpen || !currentStory || !currentShop) return;
+
     setProgress(0);
     setVideoCurrentTime(0);
     setAddedToCartToast(false);
-    if (currentStory && currentShop) {
-      markStoryAsViewed(currentStory.id, currentShop.id);
-    }
-  }, [storyViewer.shopIndex, storyViewer.storyIndex, currentStory?.id, currentShop?.id]);
+    markStoryAsViewed(currentStory.id, currentShop.id);
+  }, [storyViewer.isOpen, storyViewer.shopIndex, storyViewer.storyIndex, currentStory?.id, currentShop?.id]);
 
   // Main Timer & Progress Engine
   // Rule 1: Images show for exactly 10 seconds (10,000ms)

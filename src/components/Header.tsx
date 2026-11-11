@@ -66,26 +66,43 @@ export const Header: React.FC = () => {
   const catalogRef = useRef<HTMLDivElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
   const currRef = useRef<HTMLDivElement>(null);
+  const mobileLangRef = useRef<HTMLDivElement>(null);
+  const mobileCurrRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdowns on outside click
+  // Close dropdowns on outside click or outside touch
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (catalogRef.current && !catalogRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+      if (!target) return;
+
+      if (catalogRef.current && !catalogRef.current.contains(target)) {
         setIsCatalogOpen(false);
       }
-      if (langRef.current && !langRef.current.contains(event.target as Node)) {
+
+      const isInsideLang = (langRef.current && langRef.current.contains(target)) || 
+                           (mobileLangRef.current && mobileLangRef.current.contains(target));
+      if (!isInsideLang) {
         setIsLangDropdownOpen(false);
       }
-      if (currRef.current && !currRef.current.contains(event.target as Node)) {
+
+      const isInsideCurr = (currRef.current && currRef.current.contains(target)) || 
+                           (mobileCurrRef.current && mobileCurrRef.current.contains(target));
+      if (!isInsideCurr) {
         setIsCurrencyDropdownOpen(false);
       }
-      if (userRef.current && !userRef.current.contains(event.target as Node)) {
+
+      if (userRef.current && !userRef.current.contains(target)) {
         setIsUserMenuOpen(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   const getCategoryIcon = (slug: string) => {
@@ -306,25 +323,41 @@ export const Header: React.FC = () => {
             </Link>
 
             {/* Currency selector */}
-            <div className="relative">
+            <div className="relative" ref={mobileCurrRef}>
               <button
-                onClick={() => setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)}
-                className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-black text-[11px]"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen);
+                  setIsLangDropdownOpen(false);
+                }}
+                className="flex items-center gap-0.5 px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 font-black text-xs active:scale-95 transition-all select-none"
+                aria-label="Valyutani tanlash"
               >
                 <span>{currency}</span>
-                <ChevronDown className="w-3 h-3 text-neutral-400" />
+                <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${isCurrencyDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
               {isCurrencyDropdownOpen && (
-                <div className="absolute right-0 mt-1 w-28 bg-white dark:bg-[#171717] rounded-xl shadow-2xl border border-neutral-200 dark:border-neutral-800 py-1 z-50 animate-in fade-in">
+                <div 
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 mt-1.5 w-32 bg-white dark:bg-[#1A1A1E] rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-700/80 py-1.5 z-[70] animate-in fade-in slide-in-from-top-1 divide-y divide-neutral-100 dark:divide-neutral-800"
+                >
                   {(['UZS', 'USD', 'RUB'] as Currency[]).map((c) => (
                     <button
                       key={c}
-                      onClick={() => { setCurrency(c); setIsCurrencyDropdownOpen(false); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
-                        currency === c ? 'text-brand-teal font-black' : ''
+                      type="button"
+                      onClick={() => { 
+                        setCurrency(c); 
+                        setIsCurrencyDropdownOpen(false); 
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 text-xs font-bold transition-colors flex items-center justify-between active:bg-neutral-100 dark:active:bg-neutral-800 ${
+                        currency === c 
+                          ? 'text-brand-teal bg-brand-teal/5 font-black' 
+                          : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/60'
                       }`}
                     >
-                      {c}
+                      <span>{c === 'UZS' ? "UZS (so'm)" : c === 'USD' ? 'USD ($)' : 'RUB (₽)'}</span>
+                      {currency === c && <span className="w-1.5 h-1.5 rounded-full bg-brand-teal" />}
                     </button>
                   ))}
                 </div>
@@ -333,41 +366,70 @@ export const Header: React.FC = () => {
 
             {/* Theme toggle */}
             <button
+              type="button"
               onClick={toggleTheme}
-              className="p-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+              className="p-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 active:scale-95 transition-all"
               title={theme === 'dark' ? t.common.themeLight : t.common.themeDark}
+              aria-label="Mavzuni almashtirish"
             >
-              {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-yellow-400" /> : <Moon className="w-3.5 h-3.5 text-neutral-600" />}
+              {theme === 'dark' ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-neutral-600" />}
             </button>
 
             {/* Language Switcher */}
-            <div className="relative">
+            <div className="relative" ref={mobileLangRef}>
               <button
-                onClick={() => setIsLangDropdownOpen(!isLangDropdownOpen)}
-                className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold uppercase text-[11px]"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLangDropdownOpen(!isLangDropdownOpen);
+                  setIsCurrencyDropdownOpen(false);
+                }}
+                className="flex items-center gap-0.5 px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 font-bold uppercase text-xs active:scale-95 transition-all select-none"
+                aria-label="Tilni tanlash"
               >
-                <span>{language}</span>
-                <ChevronDown className="w-3 h-3 text-neutral-400" />
+                <span>{language === 'uz' ? 'UZ' : language === 'ru' ? 'RU' : 'EN'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${isLangDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
               {isLangDropdownOpen && (
-                <div className="absolute right-0 mt-1 w-28 bg-white dark:bg-[#171717] rounded-xl shadow-2xl border border-neutral-200 dark:border-neutral-800 py-1 z-50 animate-in fade-in">
+                <div 
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 mt-1.5 w-36 bg-white dark:bg-[#1A1A1E] rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-700/80 py-1.5 z-[70] animate-in fade-in slide-in-from-top-1 divide-y divide-neutral-100 dark:divide-neutral-800"
+                >
                   <button
+                    type="button"
                     onClick={() => { setLanguage('uz'); setIsLangDropdownOpen(false); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-neutral-100 dark:hover:bg-neutral-800 ${language === 'uz' ? 'text-brand-teal font-bold' : ''}`}
+                    className={`w-full text-left px-3.5 py-2.5 text-xs font-semibold transition-colors flex items-center justify-between active:bg-neutral-100 dark:active:bg-neutral-800 ${
+                      language === 'uz' 
+                        ? 'text-brand-teal bg-brand-teal/5 font-black' 
+                        : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/60'
+                    }`}
                   >
-                    🇺🇿 O'zbek
+                    <span>🇺🇿 O'zbekcha</span>
+                    {language === 'uz' && <span className="w-1.5 h-1.5 rounded-full bg-brand-teal" />}
                   </button>
                   <button
+                    type="button"
                     onClick={() => { setLanguage('ru'); setIsLangDropdownOpen(false); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-neutral-100 dark:hover:bg-neutral-800 ${language === 'ru' ? 'text-brand-teal font-bold' : ''}`}
+                    className={`w-full text-left px-3.5 py-2.5 text-xs font-semibold transition-colors flex items-center justify-between active:bg-neutral-100 dark:active:bg-neutral-800 ${
+                      language === 'ru' 
+                        ? 'text-brand-teal bg-brand-teal/5 font-black' 
+                        : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/60'
+                    }`}
                   >
-                    🇷🇺 Русский
+                    <span>🇷🇺 Русский</span>
+                    {language === 'ru' && <span className="w-1.5 h-1.5 rounded-full bg-brand-teal" />}
                   </button>
                   <button
+                    type="button"
                     onClick={() => { setLanguage('en'); setIsLangDropdownOpen(false); }}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-neutral-100 dark:hover:bg-neutral-800 ${language === 'en' ? 'text-brand-teal font-bold' : ''}`}
+                    className={`w-full text-left px-3.5 py-2.5 text-xs font-semibold transition-colors flex items-center justify-between active:bg-neutral-100 dark:active:bg-neutral-800 ${
+                      language === 'en' 
+                        ? 'text-brand-teal bg-brand-teal/5 font-black' 
+                        : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/60'
+                    }`}
                   >
-                    🇬🇧 English
+                    <span>🇬🇧 English</span>
+                    {language === 'en' && <span className="w-1.5 h-1.5 rounded-full bg-brand-teal" />}
                   </button>
                 </div>
               )}
@@ -602,13 +664,22 @@ export const Header: React.FC = () => {
               )}
             </div>
           ) : (
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="h-9 px-3.5 sm:px-4 rounded-full bg-[#020106] dark:bg-white text-white dark:text-neutral-900 text-xs sm:text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm flex items-center gap-1.5"
-            >
-              <User className="w-3.5 h-3.5 text-brand-teal" />
-              <span>{t.common.signInOrRegister}</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <Link
+                to="/profile"
+                className="h-9 px-3 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 text-xs font-bold hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all flex items-center gap-1.5"
+                title="Shaxsiy Mehmon Kabineti"
+              >
+                <User className="w-3.5 h-3.5 text-brand-teal" />
+                <span className="hidden xl:inline">Kabinet</span>
+              </Link>
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="h-9 px-3.5 sm:px-4 rounded-full bg-[#020106] dark:bg-white text-white dark:text-neutral-900 text-xs sm:text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>{t.common.signInOrRegister}</span>
+              </button>
+            </div>
           )}
 
           {/* Wishlist Button */}

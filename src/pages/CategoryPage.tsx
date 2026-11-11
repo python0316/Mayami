@@ -280,7 +280,46 @@ export const CategoryPage: React.FC = () => {
 
   // Sidebar Filter Component (reused on Desktop & Mobile)
   const FilterContent = () => (
-    <div className="space-y-6">
+    <div className="space-y-6 text-neutral-900 dark:text-neutral-100">
+      {/* 1. Sorting Section (Saralash) */}
+      <div className="border-b border-neutral-200 dark:border-neutral-800 pb-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-black uppercase tracking-wider text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+            <ArrowUpDown className="w-3.5 h-3.5 text-brand-teal" />
+            <span>{t.common.sortBy || "Saralash"}</span>
+          </h3>
+        </div>
+        <div className="space-y-1.5">
+          {[
+            { id: 'popular', label: t.common.sortPopular || "Ommabopligi bo'yicha" },
+            { id: 'price_asc', label: t.common.sortPriceAsc || "Narxi arzonlashuvi" },
+            { id: 'price_desc', label: t.common.sortPriceDesc || "Narxi qimmatlashuvi" },
+            { id: 'rating', label: t.common.sortRating || "Reyting bo'yicha" },
+            { id: 'newest', label: language === 'uz' ? "Eng yangi" : language === 'ru' ? "Сначала новые" : "Newest" }
+          ].map(opt => {
+            const isSelected = sortBy === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  setSortBy(opt.id as any);
+                  updateUrlParams({ sort: opt.id === 'popular' ? null : opt.id });
+                }}
+                className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
+                  isSelected
+                    ? 'bg-brand-teal text-white shadow-xs'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700'
+                }`}
+              >
+                <span>{opt.label}</span>
+                {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Subcategories section */}
       {category?.subcategories && category.subcategories.length > 0 && (
         <div className="border-b border-neutral-200 dark:border-neutral-800 pb-5">
@@ -292,24 +331,24 @@ export const CategoryPage: React.FC = () => {
             {selectedSubcat && (
               <button 
                 onClick={() => handleSubcategorySelect(null)}
-                className="text-[11px] text-brand-teal hover:underline font-semibold"
+                className="text-[11px] text-brand-teal hover:underline font-bold"
               >
                 {t.common.clear || "Tozalash"}
               </button>
             )}
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <button
               onClick={() => handleSubcategorySelect(null)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                 selectedSubcat === null
-                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-sm'
-                  : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/80'
+                  ? 'bg-brand-teal text-white shadow-sm'
+                  : 'text-neutral-800 dark:text-neutral-200 bg-neutral-100 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-800'
               }`}
             >
               <span>{language === 'uz' ? "Barcha mahsulotlar" : language === 'ru' ? "Все товары" : "All Products"}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                selectedSubcat === null ? 'bg-white/20 dark:bg-black/20 text-white dark:text-neutral-900' : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-500'
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                selectedSubcat === null ? 'bg-white/25 text-white' : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200'
               }`}>
                 {baseCategoryProducts.length}
               </span>
@@ -324,17 +363,17 @@ export const CategoryPage: React.FC = () => {
                 <button
                   key={sub.id}
                   onClick={() => handleSubcategorySelect(sub.slug)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all group ${
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all group ${
                     isSelected
                       ? 'bg-brand-teal text-white shadow-sm'
-                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/80'
+                      : 'text-neutral-800 dark:text-neutral-200 bg-neutral-100 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-800'
                   }`}
                 >
                   <span className="truncate text-left">{subTitle}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ml-2 ${
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 ml-2 font-bold ${
                     isSelected 
                       ? 'bg-white/25 text-white' 
-                      : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-500 group-hover:text-neutral-700 dark:group-hover:text-neutral-300'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200 group-hover:bg-neutral-300'
                   }`}>
                     {count}
                   </span>
@@ -355,7 +394,7 @@ export const CategoryPage: React.FC = () => {
           {(minPriceInput || maxPriceInput) && (
             <button 
               onClick={handleClearPrice}
-              className="text-[11px] text-brand-teal hover:underline font-semibold"
+              className="text-[11px] text-brand-teal hover:underline font-bold"
             >
               {t.common.clear || "Tozalash"}
             </button>
@@ -363,9 +402,9 @@ export const CategoryPage: React.FC = () => {
         </div>
 
         {/* Min / Max inputs */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="grid grid-cols-2 gap-2.5 mb-3">
           <div>
-            <label className="text-[10px] uppercase font-bold text-neutral-400 block mb-1">
+            <label className="text-[11px] uppercase font-extrabold text-neutral-700 dark:text-neutral-300 block mb-1">
               {t.common.from || "dan"} ({currencySymbol})
             </label>
             <input
@@ -374,11 +413,11 @@ export const CategoryPage: React.FC = () => {
               value={minPriceInput}
               onChange={(e) => setMinPriceInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handlePriceApply(); }}
-              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:border-brand-teal"
+              className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal transition-all"
             />
           </div>
           <div>
-            <label className="text-[10px] uppercase font-bold text-neutral-400 block mb-1">
+            <label className="text-[11px] uppercase font-extrabold text-neutral-700 dark:text-neutral-300 block mb-1">
               {t.common.to || "gacha"} ({currencySymbol})
             </label>
             <input
@@ -387,14 +426,14 @@ export const CategoryPage: React.FC = () => {
               value={maxPriceInput}
               onChange={(e) => setMaxPriceInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handlePriceApply(); }}
-              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:border-brand-teal"
+              className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal transition-all"
             />
           </div>
         </div>
 
         {/* Quick price presets */}
         <div className="mb-3">
-          <span className="text-[10px] uppercase font-bold text-neutral-400 block mb-1.5">
+          <span className="text-[11px] uppercase font-extrabold text-neutral-700 dark:text-neutral-300 block mb-1.5">
             {t.common.quickRanges || "Tezkor filtr"}
           </span>
           <div className="flex flex-wrap gap-1.5">
@@ -406,10 +445,10 @@ export const CategoryPage: React.FC = () => {
                 <button
                   key={idx}
                   onClick={() => handleQuickPreset(preset.min, preset.max)}
-                  className={`text-[11px] px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                  className={`text-[11px] px-3 py-1.5 rounded-lg font-bold transition-all ${
                     isActive 
                       ? 'bg-brand-teal text-white shadow-xs' 
-                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700/60'
                   }`}
                 >
                   {preset.label}
@@ -422,7 +461,7 @@ export const CategoryPage: React.FC = () => {
         {/* Apply button */}
         <button
           onClick={handlePriceApply}
-          className="w-full py-2 rounded-xl bg-[#020106] dark:bg-white text-white dark:text-neutral-900 text-xs font-bold hover:opacity-90 active:scale-98 transition-all"
+          className="w-full py-2.5 rounded-xl bg-brand-teal hover:bg-brand-teal-hover text-white text-xs font-black shadow-md active:scale-98 transition-all"
         >
           {t.common.apply || "Qo'llash"}
         </button>
@@ -434,7 +473,7 @@ export const CategoryPage: React.FC = () => {
           {language === 'uz' ? "Mavjudlik va Chegirmalar" : language === 'ru' ? "Наличие и скидки" : "Availability & Deals"}
         </h3>
 
-        <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+        <label className="flex items-center gap-2.5 cursor-pointer text-xs font-bold text-neutral-800 dark:text-neutral-200 select-none">
           <input
             type="checkbox"
             checked={inStockOnly}
@@ -448,7 +487,7 @@ export const CategoryPage: React.FC = () => {
           <span>{t.common.inStockOnly || "Faqat sotuvda borlari"}</span>
         </label>
 
-        <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+        <label className="flex items-center gap-2.5 cursor-pointer text-xs font-bold text-neutral-800 dark:text-neutral-200 select-none">
           <input
             type="checkbox"
             checked={discountOnly}
@@ -467,9 +506,9 @@ export const CategoryPage: React.FC = () => {
       {activeFiltersCount > 0 && (
         <button
           onClick={handleClearAllFilters}
-          className="w-full py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-bold flex items-center justify-center gap-2 transition-all"
+          className="w-full py-2.5 rounded-xl border-2 border-neutral-300 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-black flex items-center justify-center gap-2 transition-all"
         >
-          <RotateCcw className="w-3.5 h-3.5 text-neutral-400" />
+          <RotateCcw className="w-3.5 h-3.5 text-neutral-500" />
           <span>{t.common.clearAll || "Barchasini tozalash"} ({activeFiltersCount})</span>
         </button>
       )}
@@ -614,13 +653,13 @@ export const CategoryPage: React.FC = () => {
                     setSortBy(nextSort);
                     updateUrlParams({ sort: nextSort === 'popular' ? null : nextSort });
                   }}
-                  className="bg-transparent text-neutral-800 dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
+                  className="bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-bold focus:outline-none cursor-pointer text-xs [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-900 dark:[&>option]:text-white"
                 >
-                  <option value="popular">{t.common.sortPopular || "Ommabopligi"}</option>
-                  <option value="price_asc">{t.common.sortPriceAsc || "Narxi: arzondan qimmatga"}</option>
-                  <option value="price_desc">{t.common.sortPriceDesc || "Narxi: qimmatdan arzonga"}</option>
-                  <option value="rating">{t.common.sortRating || "Reyting bo'yicha"}</option>
-                  <option value="newest">{language === 'uz' ? "Eng yangi" : language === 'ru' ? "Сначала новые" : "Newest"}</option>
+                  <option value="popular" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-white font-bold">{t.common.sortPopular || "Ommabopligi bo'yicha"}</option>
+                  <option value="price_asc" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-white font-bold">{t.common.sortPriceAsc || "Narxi arzonlashuvi"}</option>
+                  <option value="price_desc" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-white font-bold">{t.common.sortPriceDesc || "Narxi qimmatlashuvi"}</option>
+                  <option value="rating" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-white font-bold">{t.common.sortRating || "Reyting bo'yicha"}</option>
+                  <option value="newest" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-white font-bold">{language === 'uz' ? "Eng yangi" : language === 'ru' ? "Сначала новые" : "Newest"}</option>
                 </select>
               </div>
             </div>
@@ -722,17 +761,18 @@ export const CategoryPage: React.FC = () => {
           />
 
           {/* Drawer Sheet */}
-          <div className="relative w-full max-w-xs sm:max-w-sm h-full bg-white dark:bg-[#171717] p-5 pb-24 lg:pb-5 shadow-2xl flex flex-col z-10 overflow-y-auto">
+          <div className="relative w-full max-w-xs sm:max-w-sm h-full bg-white dark:bg-[#141416] text-neutral-900 dark:text-neutral-100 p-5 pb-24 lg:pb-5 shadow-2xl flex flex-col z-10 overflow-y-auto">
             <div className="flex items-center justify-between pb-4 mb-4 border-b border-neutral-200 dark:border-neutral-800">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4 text-brand-teal" />
-                <h2 className="text-base font-bold text-neutral-900 dark:text-white">
+                <h2 className="text-base font-black text-neutral-900 dark:text-white">
                   {t.common.filter || "Filtrlar"}
                 </h2>
               </div>
               <button
                 onClick={() => setIsMobileFilterOpen(false)}
-                className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500"
+                className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
+                aria-label="Yopish"
               >
                 <X className="w-5 h-5" />
               </button>

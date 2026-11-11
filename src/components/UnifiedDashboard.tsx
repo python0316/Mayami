@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp, DEFAULT_VENDOR_PERMISSIONS, ALL_PERMISSIONS } from '../context/AppContext';
-import { PermissionKey, Shop, Product, OrderStatus, ProductReview, ColorOption, Category, Subcategory } from '../types';
-import { parseStoryMedia } from '../utils/mediaUtils';
-import { autoTranslateProduct, translateColorName, getLocalizedProductText, getLocalizedColorName } from '../utils/translator';
+import { PermissionKey, Shop, Product, OrderStatus, ProductReview, ColorOption, Category, Subcategory, Banner } from '../types';
+import { parseStoryMedia, sanitizeBannerImageUrl, getBannerFallbackImage, isLikelyImageUrl, handleBannerImageError } from '../utils/mediaUtils';
+import { autoTranslateProduct, translateColorName, getLocalizedProductText, getLocalizedColorName, translateUzToRu, translateUzToEn } from '../utils/translator';
 import { 
   ShieldCheck, 
   Store, 
@@ -49,7 +49,10 @@ import {
   Languages,
   Calendar,
   UserCheck,
-  PhoneCall
+  PhoneCall,
+  Megaphone,
+  Clipboard,
+  AlertTriangle
 } from 'lucide-react';
 
 export const UnifiedDashboard: React.FC = () => {
@@ -89,6 +92,11 @@ export const UnifiedDashboard: React.FC = () => {
     updateSuperAdminPassword,
     registeredUsers,
     deleteRegisteredUser,
+    banners,
+    addBanner,
+    updateBanner,
+    deleteBanner,
+    toggleBannerStatus,
     theme,
     language,
     t
@@ -157,6 +165,310 @@ export const UnifiedDashboard: React.FC = () => {
     return shops.filter(s => s.id === activeScopeShopId);
   }, [shops, activeScopeShopId]);
 
+  // Safe gradient helper to ensure images are never blocked by opaque gradients
+  const getSafeGradient = (grad?: string): string => {
+    if (!grad) return 'from-neutral-950/85 via-neutral-950/40 to-transparent';
+    if (grad.includes('to-transparent')) return grad;
+    const fromMatch = grad.match(/from-([a-z]+-[0-9]+)/);
+    if (fromMatch) {
+      const color = fromMatch[1];
+      return `from-${color}/85 via-${color}/40 to-transparent`;
+    }
+    return 'from-neutral-950/85 via-neutral-950/40 to-transparent';
+  };
+
+  // Filtered Banners & Banner Management State
+  const [bannerFilterShop, setBannerFilterShop] = useState<string>('all');
+  const [bannerFilterStatus, setBannerFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
+  const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
+  const [isTranslatingBanner, setIsTranslatingBanner] = useState(false);
+  const [bannerLangTab, setBannerLangTab] = useState<'uz' | 'ru' | 'en'>('uz');
+  const [bannerImgError, setBannerImgError] = useState(false);
+
+  const scopedBanners = useMemo(() => {
+    let list = banners;
+    if (!isSuperAdmin) {
+      list = list.filter(b => b.shopId === currentShopId);
+    } else {
+      if (bannerFilterShop !== 'all') {
+        if (bannerFilterShop === 'marketplace') {
+          list = list.filter(b => !b.shopId);
+        } else {
+          list = list.filter(b => b.shopId === bannerFilterShop);
+        }
+      }
+    }
+
+    if (bannerFilterStatus === 'active') {
+      list = list.filter(b => b.isActive !== false);
+    } else if (bannerFilterStatus === 'inactive') {
+      list = list.filter(b => b.isActive === false);
+    }
+
+    return list;
+  }, [banners, isSuperAdmin, currentShopId, bannerFilterShop, bannerFilterStatus]);
+
+  const [bannerFormData, setBannerFormData] = useState<{
+    title_uz: string;
+    title_ru: string;
+    title_en: string;
+    subtitle_uz: string;
+    subtitle_ru: string;
+    subtitle_en: string;
+    badge_uz: string;
+    badge_ru: string;
+    badge_en: string;
+    cta_uz: string;
+    cta_ru: string;
+    cta_en: string;
+    image: string;
+    bg_gradient: string;
+    linkType: 'category' | 'shop' | 'custom';
+    linkCategory: string;
+    shopId: string;
+    customUrl: string;
+    isActive: boolean;
+  }>({
+    title_uz: '',
+    title_ru: '',
+    title_en: '',
+    subtitle_uz: '',
+    subtitle_ru: '',
+    subtitle_en: '',
+    badge_uz: 'TOP TAKLIF',
+    badge_ru: 'ТОП ПРЕДЛОЖЕНИЕ',
+    badge_en: 'TOP OFFER',
+    cta_uz: 'Xarid qilish',
+    cta_ru: 'Купить сейчас',
+    cta_en: 'Shop Now',
+    image: '',
+    bg_gradient: 'from-neutral-950/90 via-neutral-950/60 to-transparent',
+    linkType: 'category',
+    linkCategory: 'clothing',
+    shopId: '',
+    customUrl: '',
+    isActive: true
+  });
+
+  const handleOpenCreateBanner = () => {
+    setEditingBanner(null);
+    setBannerImgError(false);
+    setBannerFormData({
+      title_uz: '',
+      title_ru: '',
+      title_en: '',
+      subtitle_uz: '',
+      subtitle_ru: '',
+      subtitle_en: '',
+      badge_uz: 'TOP TAKLIF',
+      badge_ru: 'ТОП ПРЕДЛОЖЕНИЕ',
+      badge_en: 'TOP OFFER',
+      cta_uz: 'Xarid qilish',
+      cta_ru: 'Купить сейчас',
+      cta_en: 'Shop Now',
+      image: '',
+      bg_gradient: 'from-neutral-950/85 via-neutral-950/40 to-transparent',
+      linkType: isSuperAdmin ? 'category' : 'shop',
+      linkCategory: categories[0]?.slug || 'clothing',
+      shopId: isSuperAdmin ? '' : (currentShopId || ''),
+      customUrl: '',
+      isActive: true
+    });
+    setBannerLangTab('uz');
+    setIsBannerModalOpen(true);
+  };
+
+  const handleOpenEditBanner = (b: Banner) => {
+    setEditingBanner(b);
+    setBannerImgError(false);
+    setBannerFormData({
+      title_uz: b.title_uz || '',
+      title_ru: b.title_ru || '',
+      title_en: b.title_en || '',
+      subtitle_uz: b.subtitle_uz || '',
+      subtitle_ru: b.subtitle_ru || '',
+      subtitle_en: b.subtitle_en || '',
+      badge_uz: b.badge_uz || 'TOP TAKLIF',
+      badge_ru: b.badge_ru || 'ТОП ПРЕДЛОЖЕНИЕ',
+      badge_en: b.badge_en || 'TOP OFFER',
+      cta_uz: b.cta_uz || 'Xarid qilish',
+      cta_ru: b.cta_ru || 'Купить сейчас',
+      cta_en: b.cta_en || 'Shop Now',
+      image: sanitizeBannerImageUrl(b.image || ''),
+      bg_gradient: getSafeGradient(b.bg_gradient),
+      linkType: b.linkType || (b.shopId ? 'shop' : 'category'),
+      linkCategory: b.linkCategory || (categories[0]?.slug || 'clothing'),
+      shopId: b.shopId || '',
+      customUrl: b.customUrl || '',
+      isActive: b.isActive !== false
+    });
+    setBannerLangTab('uz');
+    setIsBannerModalOpen(true);
+  };
+
+  const handlePasteImageFromClipboard = async () => {
+    try {
+      // 1. Check if clipboard contains an image file/blob (e.g. user right-clicked "Copy image" or took screenshot)
+      if (navigator.clipboard && navigator.clipboard.read) {
+        try {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            const imageType = item.types.find(t => t.startsWith('image/'));
+            if (imageType) {
+              const blob = await item.getType(imageType);
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                if (ev.target?.result) {
+                  setBannerFormData(prev => ({ ...prev, image: ev.target!.result as string }));
+                  setBannerImgError(false);
+                }
+              };
+              reader.readAsDataURL(blob);
+              return;
+            }
+          }
+        } catch (clipErr) {
+          // Some browsers or security contexts throw on read(), fallback to readText() below
+        }
+      }
+
+      // 2. Read text from clipboard
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) {
+        const cleaned = sanitizeBannerImageUrl(text);
+        setBannerFormData(prev => ({ ...prev, image: cleaned }));
+        setBannerImgError(false);
+      } else {
+        alert("Xotirada (buferda) rasm yoki havola topilmadi. Rasm manzilidan nusxa oling yoki 'Fayl yuklash' tugmasini bosing.");
+      }
+    } catch (err) {
+      alert("Havolani joylash uchun rasm havolasi maydoniga sichqonchani bosing va Ctrl+V bosing.");
+    }
+  };
+
+  const handleAutoTranslateBanner = () => {
+    if (!bannerFormData.title_uz.trim()) {
+      alert("Iltimos, avval o'zbekcha sarlavhani kiriting!");
+      return;
+    }
+    setIsTranslatingBanner(true);
+    try {
+      const title_ru = translateUzToRu(bannerFormData.title_uz);
+      const title_en = translateUzToEn(bannerFormData.title_uz);
+      const subtitle_ru = bannerFormData.subtitle_uz ? translateUzToRu(bannerFormData.subtitle_uz) : '';
+      const subtitle_en = bannerFormData.subtitle_uz ? translateUzToEn(bannerFormData.subtitle_uz) : '';
+      const badge_ru = bannerFormData.badge_uz ? translateUzToRu(bannerFormData.badge_uz) : 'ТОП ПРЕДЛОЖЕНИЕ';
+      const badge_en = bannerFormData.badge_uz ? translateUzToEn(bannerFormData.badge_uz) : 'TOP OFFER';
+      const cta_ru = bannerFormData.cta_uz ? translateUzToRu(bannerFormData.cta_uz) : 'Купить сейчас';
+      const cta_en = bannerFormData.cta_uz ? translateUzToEn(bannerFormData.cta_uz) : 'Shop Now';
+
+      setBannerFormData(prev => ({
+        ...prev,
+        title_ru,
+        title_en,
+        subtitle_ru,
+        subtitle_en,
+        badge_ru,
+        badge_en,
+        cta_ru,
+        cta_en
+      }));
+    } finally {
+      setIsTranslatingBanner(false);
+    }
+  };
+
+  const handleBannerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert("Iltimos, faqat rasm faylini tanlang (JPG, PNG, WEBP, GIF)!");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) {
+        setBannerFormData(prev => ({ ...prev, image: ev.target!.result as string }));
+        setBannerImgError(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleModalPaste = (e: React.ClipboardEvent) => {
+    // Check if clipboard contains an image file
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              if (ev.target?.result) {
+                setBannerFormData(prev => ({ ...prev, image: ev.target!.result as string }));
+                setBannerImgError(false);
+              }
+            };
+            reader.readAsDataURL(file);
+            return;
+          }
+        }
+      }
+    }
+  };
+
+  const handleSaveBanner = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bannerFormData.title_uz.trim()) {
+      alert("Iltimos, reklama sarlavhasini kiriting!");
+      return;
+    }
+    const cleanImg = sanitizeBannerImageUrl(bannerFormData.image);
+    if (!cleanImg) {
+      alert("Iltimos, reklama rasmini kiriting yoki fayl yuklang!");
+      return;
+    }
+
+    const assignedShopId = isSuperAdmin
+      ? (bannerFormData.shopId ? bannerFormData.shopId : undefined)
+      : (currentShopId || undefined);
+
+    const bannerData = {
+      title_uz: bannerFormData.title_uz.trim(),
+      title_ru: (bannerFormData.title_ru || bannerFormData.title_uz).trim(),
+      title_en: (bannerFormData.title_en || bannerFormData.title_uz).trim(),
+      subtitle_uz: bannerFormData.subtitle_uz.trim(),
+      subtitle_ru: (bannerFormData.subtitle_ru || bannerFormData.subtitle_uz).trim(),
+      subtitle_en: (bannerFormData.subtitle_en || bannerFormData.subtitle_uz).trim(),
+      badge_uz: (bannerFormData.badge_uz || 'TOP TAKLIF').trim(),
+      badge_ru: (bannerFormData.badge_ru || 'ТОП ПРЕДЛОЖЕНИЕ').trim(),
+      badge_en: (bannerFormData.badge_en || 'TOP OFFER').trim(),
+      cta_uz: (bannerFormData.cta_uz || 'Xarid qilish').trim(),
+      cta_ru: (bannerFormData.cta_ru || 'Купить сейчас').trim(),
+      cta_en: (bannerFormData.cta_en || 'Shop Now').trim(),
+      image: cleanImg,
+      bg_gradient: getSafeGradient(bannerFormData.bg_gradient),
+      linkType: bannerFormData.linkType,
+      linkCategory: bannerFormData.linkType === 'category' ? bannerFormData.linkCategory : undefined,
+      shopId: assignedShopId,
+      customUrl: bannerFormData.linkType === 'custom' ? bannerFormData.customUrl : undefined,
+      isActive: bannerFormData.isActive,
+      createdBy: isSuperAdmin ? ('admin' as const) : ('vendor' as const),
+      createdByName: isSuperAdmin ? 'Mayami SuperAdmin' : (currentShop?.name || 'Sotuvchi')
+    };
+
+    if (editingBanner) {
+      updateBanner(editingBanner.id, bannerData);
+    } else {
+      addBanner(bannerData);
+    }
+
+    setIsBannerModalOpen(false);
+  };
+
   // --- MODAL STATES ---
   // Product Modal
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -181,6 +493,9 @@ export const UnifiedDashboard: React.FC = () => {
     colors: 'Qora:#000000, Oq:#FFFFFF'
   });
   const [prodLangTab, setProdLangTab] = useState<'uz' | 'ru' | 'en'>('uz');
+  const [isRuEdited, setIsRuEdited] = useState(false);
+  const [isEnEdited, setIsEnEdited] = useState(false);
+  const [translateNotice, setTranslateNotice] = useState<string | null>(null);
 
   const [formColors, setFormColors] = useState<Array<{
     name_uz: string;
@@ -404,6 +719,9 @@ export const UnifiedDashboard: React.FC = () => {
   // Handlers
   const handleOpenAddProduct = () => {
     setEditingProduct(null);
+    setIsRuEdited(false);
+    setIsEnEdited(false);
+    setTranslateNotice(null);
     setFormColors([
       {
         name_uz: 'Qora',
@@ -459,6 +777,11 @@ export const UnifiedDashboard: React.FC = () => {
           }
         ];
     setFormColors(existingColors);
+    const hasCustomRu = Boolean(prod.name?.ru && prod.name.ru !== prod.name?.uz);
+    const hasCustomEn = Boolean(prod.name?.en && prod.name.en !== prod.name?.uz);
+    setIsRuEdited(hasCustomRu);
+    setIsEnEdited(hasCustomEn);
+    setTranslateNotice(null);
     setProdForm({
       nameUz: prod.name?.uz || prod.title?.uz || '',
       nameRu: prod.name?.ru || prod.title?.ru || '',
@@ -483,8 +806,10 @@ export const UnifiedDashboard: React.FC = () => {
   };
 
   const handleAutoTranslateProduct = () => {
-    if (!prodForm.nameUz.trim()) return;
-    const trans = autoTranslateProduct(prodForm.nameUz, prodForm.descriptionUz);
+    const name = prodForm.nameUz.trim();
+    const desc = prodForm.descriptionUz.trim();
+    if (!name && !desc) return;
+    const trans = autoTranslateProduct(name, desc);
     setProdForm(prev => ({
       ...prev,
       nameRu: trans.nameRu,
@@ -492,28 +817,72 @@ export const UnifiedDashboard: React.FC = () => {
       descriptionRu: trans.descRu,
       descriptionEn: trans.descEn
     }));
+    setIsRuEdited(false);
+    setIsEnEdited(false);
+    setTranslateNotice("✅ Ruscha va inglizchaga muvaffaqiyatli tarjima qilindi!");
+    setTimeout(() => setTranslateNotice(null), 3500);
+  };
+
+  const handleNameUzChange = (val: string) => {
+    setProdForm(prev => {
+      const trans = autoTranslateProduct(val, prev.descriptionUz);
+      return {
+        ...prev,
+        nameUz: val,
+        nameRu: isRuEdited && prev.nameRu ? prev.nameRu : trans.nameRu,
+        nameEn: isEnEdited && prev.nameEn ? prev.nameEn : trans.nameEn
+      };
+    });
+  };
+
+  const handleDescriptionUzChange = (val: string) => {
+    setProdForm(prev => {
+      const trans = autoTranslateProduct(prev.nameUz, val);
+      return {
+        ...prev,
+        descriptionUz: val,
+        descriptionRu: isRuEdited && prev.descriptionRu ? prev.descriptionRu : trans.descRu,
+        descriptionEn: isEnEdited && prev.descriptionEn ? prev.descriptionEn : trans.descEn
+      };
+    });
+  };
+
+  const handleSwitchProdLangTab = (tab: 'uz' | 'ru' | 'en') => {
+    if (tab === 'ru') {
+      if (!isRuEdited || !prodForm.nameRu?.trim() || !prodForm.descriptionRu?.trim()) {
+        const trans = autoTranslateProduct(prodForm.nameUz, prodForm.descriptionUz);
+        setProdForm(prev => ({
+          ...prev,
+          nameRu: (isRuEdited && prev.nameRu?.trim()) ? prev.nameRu : trans.nameRu,
+          descriptionRu: (isRuEdited && prev.descriptionRu?.trim()) ? prev.descriptionRu : trans.descRu
+        }));
+      }
+    } else if (tab === 'en') {
+      if (!isEnEdited || !prodForm.nameEn?.trim() || !prodForm.descriptionEn?.trim()) {
+        const trans = autoTranslateProduct(prodForm.nameUz, prodForm.descriptionUz);
+        setProdForm(prev => ({
+          ...prev,
+          nameEn: (isEnEdited && prev.nameEn?.trim()) ? prev.nameEn : trans.nameEn,
+          descriptionEn: (isEnEdited && prev.descriptionEn?.trim()) ? prev.descriptionEn : trans.descEn
+        }));
+      }
+    }
+    setProdLangTab(tab);
   };
 
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     const sizesArray = prodForm.sizes.split(',').map(s => s.trim()).filter(Boolean);
 
-    // Automatic multi-language translation for missing or identical translations
+    // Automatic multi-language translation for missing or uncustomized translations
     const autoTrans = autoTranslateProduct(prodForm.nameUz, prodForm.descriptionUz);
-    const finalNameRu = (prodForm.nameRu?.trim() && prodForm.nameRu.trim() !== prodForm.nameUz.trim())
-      ? prodForm.nameRu.trim()
-      : autoTrans.nameRu;
-    const finalNameEn = (prodForm.nameEn?.trim() && prodForm.nameEn.trim() !== prodForm.nameUz.trim())
-      ? prodForm.nameEn.trim()
-      : autoTrans.nameEn;
+    const finalNameUz = prodForm.nameUz.trim();
+    const finalNameRu = (isRuEdited && prodForm.nameRu?.trim()) ? prodForm.nameRu.trim() : autoTrans.nameRu;
+    const finalNameEn = (isEnEdited && prodForm.nameEn?.trim()) ? prodForm.nameEn.trim() : autoTrans.nameEn;
 
-    const descUz = prodForm.descriptionUz.trim() || `${prodForm.nameUz.trim()}. Mayami platformasidagi rasmiy kafolatlangan tovar.`;
-    const finalDescRu = (prodForm.descriptionRu?.trim() && prodForm.descriptionRu.trim() !== prodForm.descriptionUz.trim())
-      ? prodForm.descriptionRu.trim()
-      : autoTrans.descRu;
-    const finalDescEn = (prodForm.descriptionEn?.trim() && prodForm.descriptionEn.trim() !== prodForm.descriptionUz.trim())
-      ? prodForm.descriptionEn.trim()
-      : autoTrans.descEn;
+    const descUz = prodForm.descriptionUz.trim() || `${finalNameUz}. Mayami platformasidagi rasmiy kafolatlangan tovar.`;
+    const finalDescRu = (isRuEdited && prodForm.descriptionRu?.trim()) ? prodForm.descriptionRu.trim() : autoTrans.descRu;
+    const finalDescEn = (isEnEdited && prodForm.descriptionEn?.trim()) ? prodForm.descriptionEn.trim() : autoTrans.descEn;
 
     const colorsArray: ColorOption[] = formColors.length > 0
       ? formColors.map(c => {
@@ -786,6 +1155,7 @@ export const UnifiedDashboard: React.FC = () => {
     manage_products: { title: "Mahsulotlar Katalogi", desc: "Mahsulot qo'shish, tahrirlash va o'chirish", icon: Package },
     manage_orders: { title: "Buyurtmalar Boshqaruvi", desc: "Buyurtmalarni qabul qilish va holatini yetkazildiga o'tkazish", icon: ShoppingBag },
     manage_stories: { title: "24-Soatlik Stories", desc: "24 soatlik marketing hikoyalari joylash", icon: Flame },
+    manage_banners: { title: "Katta Reklamalar", desc: "Bosh sahifadagi katta reklama va bannerlarni joylash", icon: Megaphone },
     manage_reviews: { title: "Sharhlar va Fikrlar", desc: "Xaridorlar sharhlarini o'qish va munosabat (javob) bildirish", icon: MessageSquare },
     view_analytics: { title: "Savdo va Tahlil", desc: "Daromad, buyurtmalar grafigi va umumiy statistika", icon: BarChart3 },
     manage_settings: { title: "Do'kon Sozlamalari", desc: "Logotip, banner, manzil va telefonni o'zgartirish", icon: Settings },
@@ -1029,6 +1399,20 @@ export const UnifiedDashboard: React.FC = () => {
             >
               <MessageSquare className="w-4 h-4 text-rose-500" />
               <span>Sharhlar & Javoblar ({scopedReviews.length})</span>
+            </button>
+          )}
+
+          {(isSuperAdmin || hasPermission('manage_banners')) && (
+            <button
+              onClick={() => setActiveTab('banners')}
+              className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+                activeTab === 'banners'
+                  ? 'bg-brand-teal text-white shadow-md shadow-brand-teal/20'
+                  : 'bg-white dark:bg-[#18181C] text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white border border-neutral-200/60 dark:border-neutral-800'
+              }`}
+            >
+              <Megaphone className="w-4 h-4 text-cyan-400" />
+              <span>Katta Reklamalar ({scopedBanners.length})</span>
             </button>
           )}
 
@@ -1909,6 +2293,222 @@ export const UnifiedDashboard: React.FC = () => {
         )}
 
         {/* =========================================================================
+            TAB: 📣 KATTA REKLAMALAR & BANNERLAR BOSHQARUVI
+        ========================================================================= */}
+        {activeTab === 'banners' && (isSuperAdmin || hasPermission('manage_banners')) && (
+          <div className="space-y-5 animate-in fade-in">
+            {/* Banner Section Header Card */}
+            <div className="p-6 rounded-3xl bg-white dark:bg-[#141418] border border-neutral-200/80 dark:border-neutral-800 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-1 max-w-xl">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+                    <Megaphone className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-black text-base text-neutral-900 dark:text-white">
+                    Bosh Sahifa Katta Reklamalari (Hero Slider)
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-[10px] font-black">
+                    {scopedBanners.length} ta banner
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-500">
+                  {isSuperAdmin
+                    ? "Bosh sahifadagi barcha katta reklama bannerlarini to'liq boshqaring. Istalgan do'kon nomidan yoki Mayami umumiy aksiyasi nomidan banner qo'shing."
+                    : `${currentShop?.name || "Do'koningiz"} uchun bosh sahifada ko'rinuvchi jozibador katta reklama joylashtiring.`}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                {/* Superadmin Shop Filter */}
+                {isSuperAdmin && (
+                  <select
+                    value={bannerFilterShop}
+                    onChange={(e) => setBannerFilterShop(e.target.value)}
+                    className="px-3 py-2 rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-800 dark:text-neutral-200 focus:outline-none"
+                  >
+                    <option value="all">Barcha do'konlar reklamalari</option>
+                    <option value="marketplace">Faqat Mayami umumiy aksiyalari</option>
+                    {shops.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Status filter */}
+                <div className="flex items-center bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl text-xs font-bold">
+                  <button
+                    onClick={() => setBannerFilterStatus('all')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${bannerFilterStatus === 'all' ? 'bg-white dark:bg-neutral-700 shadow-xs text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                  >
+                    Barchasi
+                  </button>
+                  <button
+                    onClick={() => setBannerFilterStatus('active')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${bannerFilterStatus === 'active' ? 'bg-white dark:bg-neutral-700 shadow-xs text-emerald-600 dark:text-emerald-400' : 'text-neutral-500'}`}
+                  >
+                    Faol
+                  </button>
+                  <button
+                    onClick={() => setBannerFilterStatus('inactive')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${bannerFilterStatus === 'inactive' ? 'bg-white dark:bg-neutral-700 shadow-xs text-rose-500' : 'text-neutral-500'}`}
+                  >
+                    Nofaol
+                  </button>
+                </div>
+
+                {/* Add Banner Button */}
+                <button
+                  onClick={handleOpenCreateBanner}
+                  className="px-4 py-2.5 rounded-2xl bg-brand-teal text-white hover:bg-brand-teal-hover font-bold text-xs flex items-center gap-2 shadow-md shadow-brand-teal/20 transition-all active:scale-95 cursor-pointer ml-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Yangi Reklama Qo'shish</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Banners Grid */}
+            {scopedBanners.length === 0 ? (
+              <div className="p-12 text-center rounded-3xl bg-white dark:bg-[#141418] border border-neutral-200 dark:border-neutral-800 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 text-cyan-500 mx-auto flex items-center justify-center">
+                  <Megaphone className="w-6 h-6" />
+                </div>
+                <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                  Hozircha reklamalar mavjud emas
+                </div>
+                <p className="text-xs text-neutral-400 max-w-md mx-auto">
+                  Bosh sahifaning eng yuqori qismida xaridorlarni jalb qiluvchi birinchi katta reklamangizni qo'shing.
+                </p>
+                <button
+                  onClick={handleOpenCreateBanner}
+                  className="px-4 py-2 rounded-xl bg-brand-teal text-white text-xs font-bold hover:bg-brand-teal-hover transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Reklama yaratish</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {scopedBanners.map(b => {
+                  const bannerShop = b.shopId ? shops.find(s => s.id === b.shopId) : null;
+                  return (
+                    <div 
+                      key={b.id} 
+                      className={`rounded-3xl bg-white dark:bg-[#141418] border overflow-hidden shadow-sm flex flex-col justify-between transition-all ${
+                        b.isActive !== false ? 'border-neutral-200/80 dark:border-neutral-800' : 'border-neutral-200 dark:border-neutral-800 opacity-60'
+                      }`}
+                    >
+                      {/* Banner Visual Preview Top */}
+                      <div className="relative h-44 sm:h-52 overflow-hidden bg-gradient-to-r from-neutral-950 via-teal-950/70 to-neutral-900 group">
+                        <img 
+                          key={b.id}
+                          src={sanitizeBannerImageUrl(b.image)} 
+                          referrerPolicy="no-referrer"
+                          alt={b.title_uz} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                          loading="eager"
+                          onError={(e) => {
+                            handleBannerImageError(
+                              e.currentTarget,
+                              sanitizeBannerImageUrl(b.image)
+                            );
+                          }}
+                        />
+                        <div className={`absolute inset-0 bg-gradient-to-r ${getSafeGradient(b.bg_gradient)} flex flex-col justify-between p-4`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-0.5 rounded-full bg-brand-teal text-white text-[10px] font-black uppercase tracking-wider shadow">
+                                {b.badge_uz || 'TOP TAKLIF'}
+                              </span>
+                              {bannerShop ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-white text-[10px] font-bold border border-white/20">
+                                  <Store className="w-2.5 h-2.5 text-amber-300" />
+                                  <span>{bannerShop.name}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/30 backdrop-blur-md text-white text-[10px] font-bold">
+                                  Mayami Asosiy
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Status Pill */}
+                            <button
+                              onClick={() => toggleBannerStatus(b.id)}
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                b.isActive !== false 
+                                  ? 'bg-emerald-500 text-white shadow-xs' 
+                                  : 'bg-neutral-800/80 text-neutral-300 border border-white/20'
+                              }`}
+                              title={b.isActive !== false ? "Reklamani to'xtatish (pauza)" : "Reklamani yoqish (aktiv qilish)"}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${b.isActive !== false ? 'bg-white animate-pulse' : 'bg-neutral-400'}`} />
+                              <span>{b.isActive !== false ? "Faol (Ekranda)" : "Nofaol (Pauza)"}</span>
+                            </button>
+                          </div>
+
+                          <div className="space-y-1">
+                            <h4 className="text-sm sm:text-base font-black text-white line-clamp-1 drop-shadow">
+                              {b.title_uz}
+                            </h4>
+                            {b.subtitle_uz && (
+                              <p className="text-[11px] text-neutral-200 line-clamp-1 drop-shadow">
+                                {b.subtitle_uz}
+                              </p>
+                            )}
+                            <div className="pt-1">
+                              <span className="inline-block px-3 py-1 rounded-lg bg-white text-neutral-900 text-[10px] font-bold shadow-xs">
+                                {b.cta_uz || 'Xarid qilish'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom Details & Controls */}
+                      <div className="p-4 bg-neutral-50/50 dark:bg-neutral-900/30 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-3 text-xs">
+                        <div className="space-y-0.5">
+                          <div className="text-[11px] text-neutral-400 flex items-center gap-1">
+                            <span>Manzil:</span>
+                            <span className="font-bold text-neutral-700 dark:text-neutral-300">
+                              {b.linkType === 'shop' && bannerShop ? `Do'kon: ${bannerShop.name}` : b.linkCategory ? `Kategoriya: ${b.linkCategory}` : b.customUrl || "Bosh sahifa"}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-neutral-400">
+                            Muallif: <b className="text-neutral-600 dark:text-neutral-300">{b.createdByName || (bannerShop?.name || "Admin")}</b>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenEditBanner(b)}
+                            className="p-2 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 hover:text-brand-teal transition-all cursor-pointer"
+                            title="Tahrirlash"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm("Ushbu reklamani o'chirishni xohlaysizmi?")) {
+                                deleteBanner(b.id);
+                              }
+                            }}
+                            className="p-2 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
+                            title="O'chirish"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
             TAB 6: 👥 ROLES & PERMISSIONS MANAGEMENT (SUPERADMIN ONLY)
         ========================================================================= */}
         {activeTab === 'roles' && isSuperAdmin && (
@@ -2413,7 +3013,8 @@ export const UnifiedDashboard: React.FC = () => {
                   <label className="block text-xs font-bold text-neutral-500 mb-1">Telefon raqam</label>
                   <input
                     type="text"
-                    defaultValue={currentShop?.phone || '+998 88 678 22 04'}
+                    defaultValue={currentShop?.phone || ''}
+                    placeholder="+998 (90) 123-45-67"
                     onChange={(e) => currentShop && updateShopProfile(currentShop.id, { phone: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                   />
@@ -2748,8 +3349,8 @@ export const UnifiedDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleAutoTranslateProduct}
-                    disabled={!prodForm.nameUz.trim()}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-teal text-white text-xs font-bold shadow hover:bg-brand-teal-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0"
+                    disabled={!prodForm.nameUz.trim() && !prodForm.descriptionUz.trim()}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-teal text-white text-xs font-bold shadow hover:bg-brand-teal-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 active:scale-95"
                     title="O'zbekcha nom va tavsifdan Ruscha hamda Inglizchaga avtomatik tarjima qilish"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
@@ -2757,11 +3358,18 @@ export const UnifiedDashboard: React.FC = () => {
                   </button>
                 </div>
 
+                {translateNotice && (
+                  <div className="mt-2.5 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                    <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>{translateNotice}</span>
+                  </div>
+                )}
+
                 {/* Tabs for Language preview/manual edit */}
                 <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-teal-500/20">
                   <button
                     type="button"
-                    onClick={() => setProdLangTab('uz')}
+                    onClick={() => handleSwitchProdLangTab('uz')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                       prodLangTab === 'uz'
                         ? 'bg-brand-teal text-white shadow-xs'
@@ -2773,7 +3381,7 @@ export const UnifiedDashboard: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setProdLangTab('ru')}
+                    onClick={() => handleSwitchProdLangTab('ru')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                       prodLangTab === 'ru'
                         ? 'bg-brand-teal text-white shadow-xs'
@@ -2787,7 +3395,7 @@ export const UnifiedDashboard: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setProdLangTab('en')}
+                    onClick={() => handleSwitchProdLangTab('en')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                       prodLangTab === 'en'
                         ? 'bg-brand-teal text-white shadow-xs'
@@ -2812,7 +3420,7 @@ export const UnifiedDashboard: React.FC = () => {
                     type="text"
                     required
                     value={prodForm.nameUz}
-                    onChange={(e) => setProdForm({ ...prodForm, nameUz: e.target.value })}
+                    onChange={(e) => handleNameUzChange(e.target.value)}
                     placeholder="Masalan: Erkaklar klassik qora kostyumi"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                   />
@@ -2832,7 +3440,10 @@ export const UnifiedDashboard: React.FC = () => {
                   <input
                     type="text"
                     value={prodForm.nameRu}
-                    onChange={(e) => setProdForm({ ...prodForm, nameRu: e.target.value })}
+                    onChange={(e) => {
+                      setIsRuEdited(true);
+                      setProdForm({ ...prodForm, nameRu: e.target.value });
+                    }}
                     placeholder={prodForm.nameUz ? "Masalan: Мужской классический костюм" : "Avtomatik tarjima qilinadi yoki qo'lda kiriting"}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                   />
@@ -2852,7 +3463,10 @@ export const UnifiedDashboard: React.FC = () => {
                   <input
                     type="text"
                     value={prodForm.nameEn}
-                    onChange={(e) => setProdForm({ ...prodForm, nameEn: e.target.value })}
+                    onChange={(e) => {
+                      setIsEnEdited(true);
+                      setProdForm({ ...prodForm, nameEn: e.target.value });
+                    }}
                     placeholder={prodForm.nameUz ? "Masalan: Men's Classic Black Suit" : "Auto-translated or enter custom"}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                   />
@@ -3059,12 +3673,15 @@ export const UnifiedDashboard: React.FC = () => {
               {/* Batafsil Tavsif depending on prodLangTab */}
               {prodLangTab === 'uz' && (
                 <div>
-                  <label className="block text-xs font-bold text-neutral-500 mb-1">Batafsil Tavsif (O'zbekcha)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-neutral-500">Batafsil Tavsif (O'zbekcha) *</label>
+                    <span className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold">✨ Ruscha va Inglizchaga avtomatik tarjima qilinadi</span>
+                  </div>
                   <textarea
                     rows={3}
                     value={prodForm.descriptionUz}
-                    onChange={(e) => setProdForm({ ...prodForm, descriptionUz: e.target.value })}
-                    placeholder="Mahsulot haqida batafsil ma'lumot..."
+                    onChange={(e) => handleDescriptionUzChange(e.target.value)}
+                    placeholder="Mahsulot haqida batafsil ma'lumot (avtomatik boshqa tillarga tarjima qilinadi)..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                   />
                 </div>
@@ -3079,7 +3696,10 @@ export const UnifiedDashboard: React.FC = () => {
                   <textarea
                     rows={3}
                     value={prodForm.descriptionRu}
-                    onChange={(e) => setProdForm({ ...prodForm, descriptionRu: e.target.value })}
+                    onChange={(e) => {
+                      setIsRuEdited(true);
+                      setProdForm({ ...prodForm, descriptionRu: e.target.value });
+                    }}
                     placeholder="Подробное описание товара..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                   />
@@ -3095,7 +3715,10 @@ export const UnifiedDashboard: React.FC = () => {
                   <textarea
                     rows={3}
                     value={prodForm.descriptionEn}
-                    onChange={(e) => setProdForm({ ...prodForm, descriptionEn: e.target.value })}
+                    onChange={(e) => {
+                      setIsEnEdited(true);
+                      setProdForm({ ...prodForm, descriptionEn: e.target.value });
+                    }}
                     placeholder="Detailed product description..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                   />
@@ -3944,6 +4567,701 @@ export const UnifiedDashboard: React.FC = () => {
                   {editingCategory ? "O'zgarishlarni Saqlash" : "Kategoriyani Yaratish"}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          BANNER / REKLAMA CREATION & EDIT MODAL
+      ========================================================================= */}
+      {isBannerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+          <div 
+            className="relative w-full max-w-4xl bg-white dark:bg-[#141418] rounded-3xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden my-auto p-5 sm:p-7 space-y-5 max-h-[92vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-800 pb-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-neutral-900 dark:text-white">
+                    {editingBanner ? "Katta Reklamani Tahrirlash" : "Bosh Sahifaga Yangi Katta Reklama Qo'shish"}
+                  </h3>
+                  <p className="text-xs text-neutral-500">
+                    Bosh sahifaning eng yuqori qismidagi katta reklama slayderi uchun to'liq dinamik banner
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBannerModalOpen(false)}
+                className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSaveBanner} onPaste={handleModalPaste} className="overflow-y-auto pr-1 space-y-5 flex-1">
+              
+              {/* 1. Shop Assignment */}
+              {isSuperAdmin ? (
+                <div className="space-y-1.5 p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800">
+                  <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                    Reklama qaysi do'konga tegishli? (Admin erkin tanlashi mumkin):
+                  </label>
+                  <select
+                    value={bannerFormData.shopId}
+                    onChange={(e) => {
+                      const sId = e.target.value;
+                      setBannerFormData(prev => ({
+                        ...prev,
+                        shopId: sId,
+                        linkType: sId ? 'shop' : prev.linkType
+                      }));
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                  >
+                    <option value="">🌐 Mayami Umumiy Platforma Aksiya (Barcha do'konlar nomidan)</option>
+                    {shops.map(s => (
+                      <option key={s.id} value={s.id}>🏪 {s.name} ({s.id})</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-neutral-400">
+                    * Superadmin istalgan sotuvchining do'koni nomidan yoki butun bozor uchun umumiy reklama e'lon qila oladi.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-brand-teal/10 border border-brand-teal/20 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Store className="w-4 h-4 text-brand-teal" />
+                    <span className="text-xs font-bold text-neutral-900 dark:text-white">
+                      Sizning do'koningiz: <b>{currentShop?.name}</b>
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-md bg-brand-teal text-white text-[10px] font-black">
+                    Rasmiy do'kon reklamasi
+                  </span>
+                </div>
+              )}
+
+              {/* 2. Language Switcher & Auto-Translate Action */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-neutral-500 mr-1 hidden sm:inline">Til:</span>
+                  <button
+                    type="button"
+                    onClick={() => setBannerLangTab('uz')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      bannerLangTab === 'uz' ? 'bg-brand-teal text-white shadow-xs' : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900'
+                    }`}
+                  >
+                    🇺🇿 O'zbekcha
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBannerLangTab('ru')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      bannerLangTab === 'ru' ? 'bg-brand-teal text-white shadow-xs' : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900'
+                    }`}
+                  >
+                    🇷🇺 Ruscha
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBannerLangTab('en')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      bannerLangTab === 'en' ? 'bg-brand-teal text-white shadow-xs' : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900'
+                    }`}
+                  >
+                    🇬🇧 Inglizcha
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAutoTranslateBanner}
+                  disabled={isTranslatingBanner || !bannerFormData.title_uz.trim()}
+                  className="px-3.5 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  title="O'zbekcha yozilgan sarlavha va ta'rifni ruscha va inglizchaga avtomatik tarjima qilish"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{isTranslatingBanner ? "Tarjima qilinmoqda..." : "Barcha tillarga avtomatik tarjima qilish"}</span>
+                </button>
+              </div>
+
+              {/* 3. Text Fields by Language */}
+              <div className="space-y-3.5">
+                {bannerLangTab === 'uz' && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2 space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Asosiy Sarlavha (O'zbekcha) <span className="text-rose-500">*</span>:
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={bannerFormData.title_uz}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, title_uz: e.target.value }))}
+                          placeholder="Masalan: 2026 Yangi Mavsum Savdosi! 50% gacha chegirma"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Yuqori Nishon (Badge):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.badge_uz}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, badge_uz: e.target.value }))}
+                          placeholder="TOP TAKLIF, AKSIYA..."
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2 space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Qisqacha Ta'rif (Subtitle):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.subtitle_uz}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, subtitle_uz: e.target.value }))}
+                          placeholder="Masalan: Eng sara kiyimlar va sifatli poyabzallar tez yetkaziladi"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-medium text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Tugma Matni (CTA):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.cta_uz}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, cta_uz: e.target.value }))}
+                          placeholder="Xarid qilish, Do'konga o'tish..."
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {bannerLangTab === 'ru' && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2 space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Заголовок (Русский):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.title_ru}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, title_ru: e.target.value }))}
+                          placeholder="Например: Большая распродажа сезона! Скидки до 50%"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Бейдж (Badge):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.badge_ru}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, badge_ru: e.target.value }))}
+                          placeholder="ТОП ПРЕДЛОЖЕНИЕ, АКЦИЯ..."
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2 space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Описание (Подзаголовок):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.subtitle_ru}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, subtitle_ru: e.target.value }))}
+                          placeholder="Например: Лучшая одежда и обувь с быстрой доставкой"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-medium text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Текст кнопки (CTA):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.cta_ru}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, cta_ru: e.target.value }))}
+                          placeholder="Купить сейчас, В каталог..."
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {bannerLangTab === 'en' && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2 space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Title (English):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.title_en}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, title_en: e.target.value }))}
+                          placeholder="e.g. Huge Season Sale! Up to 50% discount"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Badge (English):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.badge_en}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, badge_en: e.target.value }))}
+                          placeholder="TOP OFFER, SALE..."
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2 space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          Subtitle (English):
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.subtitle_en}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, subtitle_en: e.target.value }))}
+                          placeholder="e.g. Best apparel and footwear with fast delivery across Uzbekistan"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-medium text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                          CTA Button Text:
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerFormData.cta_en}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, cta_en: e.target.value }))}
+                          placeholder="Shop Now, Visit Store..."
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* 4. Image Upload & Presets */}
+              <div className="space-y-3 p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                      Reklama Rasmi (URL yoki fayl yuklash) <span className="text-rose-500">*</span>:
+                    </label>
+                    <p className="text-[11px] text-neutral-400">
+                      Rasm havolasini yozing, 'Havolani qo'yish' tugmasini bosing yoki to'g'ridan-to'g'ri fayl yuklang
+                    </p>
+                  </div>
+                  {bannerFormData.image && (
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 shrink-0">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Rasm kiritildi
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      required
+                      value={bannerFormData.image}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setBannerFormData(prev => ({ ...prev, image: val }));
+                        setBannerImgError(false);
+                      }}
+                      onBlur={(e) => {
+                        const cleaned = sanitizeBannerImageUrl(e.target.value);
+                        if (cleaned !== e.target.value) {
+                          setBannerFormData(prev => ({ ...prev, image: cleaned }));
+                        }
+                      }}
+                      placeholder="https://... rasm havolasini kiriting yoki fayl yuklang"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs text-neutral-900 dark:text-white focus:outline-none focus:border-brand-teal font-mono pr-20"
+                    />
+                    {bannerFormData.image && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBannerFormData(prev => ({ ...prev, image: '' }));
+                          setBannerImgError(false);
+                        }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-rose-500 text-xs font-bold px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                        title="O'chirish"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handlePasteImageFromClipboard}
+                      className="px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                      title="Nusxalangan rasm yoki havolani qo'yish"
+                    >
+                      <Clipboard className="w-4 h-4 text-brand-teal" />
+                      <span>Havolani qo'yish</span>
+                    </button>
+
+                    <label className="px-4 py-2.5 rounded-xl bg-brand-teal hover:bg-brand-teal-hover text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs">
+                      <Upload className="w-4 h-4" />
+                      <span>Fayl yuklash</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBannerImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Live Image URL thumbnail indicator */}
+                {bannerFormData.image ? (
+                  <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative w-16 h-12 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 shrink-0 bg-neutral-100 dark:bg-neutral-900">
+                        <img
+                          key={bannerFormData.image}
+                          src={sanitizeBannerImageUrl(bannerFormData.image)}
+                          referrerPolicy="no-referrer"
+                          alt="Tanlangan rasm"
+                          className="w-full h-full object-cover"
+                          onLoad={() => setBannerImgError(false)}
+                          onError={(e) => {
+                            handleBannerImageError(
+                              e.currentTarget,
+                              sanitizeBannerImageUrl(bannerFormData.image),
+                              undefined,
+                              () => setBannerImgError(true)
+                            );
+                          }}
+                        />
+                      </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                            {bannerFormData.image.startsWith('data:') ? 'Yuklangan fayl (Galereyadan)' : 'URL manzilidagi rasm'}
+                          </p>
+                          {bannerImgError ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                              Havola tekshirilmoqda
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              ✓ Faol
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-neutral-400 truncate max-w-sm sm:max-w-md font-mono">
+                          {bannerFormData.image.startsWith('data:') ? 'Qurilmadan yuklangan rasm (Offline ishlaydi)' : bannerFormData.image}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBannerFormData(prev => ({ ...prev, image: '' }));
+                        setBannerImgError(false);
+                      }}
+                      className="px-2.5 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer shrink-0"
+                    >
+                      Tozalash
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-brand-teal/5 border border-brand-teal/20 text-neutral-600 dark:text-neutral-400 text-xs flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-brand-teal shrink-0" />
+                      <span>Rasm havolasini yozing, fayl yuklang yoki pastdagi 8 ta tayyor namunaviy rasmdan birini tanlang.</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Presets */}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] text-neutral-400 font-bold block">Tayyor namunaviy rasmlar (1 marta bosishda o'rnatish):</span>
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                    {[
+                      { name: "👗 Kiyimlar", url: "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1400&auto=format&fit=crop&q=80" },
+                      { name: "👟 Krossovkalar", url: "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=1400&auto=format&fit=crop&q=80" },
+                      { name: "📱 Gadjetlar", url: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=1400&auto=format&fit=crop&q=80" },
+                      { name: "✨ Kosmetika", url: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=1400&auto=format&fit=crop&q=80" },
+                      { name: "🕌 Joynamoz", url: "https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=1400&auto=format&fit=crop&q=80" },
+                      { name: "⌚ Soatlar", url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1400&auto=format&fit=crop&q=80" },
+                      { name: "👜 Sumkalar", url: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=1400&auto=format&fit=crop&q=80" },
+                      { name: "🎧 Aksessuarlar", url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1400&auto=format&fit=crop&q=80" }
+                    ].map((p, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setBannerFormData(prev => ({ ...prev, image: p.url }));
+                          setBannerImgError(false);
+                        }}
+                        className={`shrink-0 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          bannerFormData.image === p.url
+                            ? 'bg-brand-teal text-white border-brand-teal shadow-xs'
+                            : 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:border-brand-teal'
+                        }`}
+                      >
+                        <span>{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. Background Gradient Picker & Link Settings */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Gradient Picker */}
+                <div className="space-y-1.5 p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800">
+                  <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                    Fon Gradientini Tanlang:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { name: "Obsidian Qora", value: "from-neutral-950/85 via-neutral-950/40 to-transparent", color: "bg-neutral-900" },
+                      { name: "Mayami Teal", value: "from-teal-950/85 via-teal-950/40 to-transparent", color: "bg-teal-900" },
+                      { name: "Arktik Cyan", value: "from-cyan-950/85 via-cyan-950/40 to-transparent", color: "bg-cyan-950" },
+                      { name: "Chuqur Indigo", value: "from-indigo-950/85 via-indigo-950/40 to-transparent", color: "bg-indigo-950" },
+                      { name: "Yoqut Rose", value: "from-rose-950/85 via-rose-950/40 to-transparent", color: "bg-rose-950" },
+                      { name: "Zumrad Yashil", value: "from-emerald-950/85 via-emerald-950/40 to-transparent", color: "bg-emerald-950" },
+                      { name: "Oltin Qahrabo", value: "from-amber-950/85 via-amber-950/40 to-transparent", color: "bg-amber-950" }
+                    ].map((g, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setBannerFormData(prev => ({ ...prev, bg_gradient: g.value }))}
+                        className={`p-2 rounded-xl text-[10px] font-bold text-left flex items-center gap-2 border transition-all cursor-pointer ${
+                          getSafeGradient(bannerFormData.bg_gradient) === g.value
+                            ? 'border-brand-teal bg-white dark:bg-neutral-800 ring-2 ring-brand-teal/30 text-brand-teal'
+                            : 'border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400'
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded-full ${g.color} shrink-0 border border-white/20`} />
+                        <span className="truncate">{g.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Link Target Settings */}
+                <div className="space-y-2 p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800">
+                  <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                    Bosilganda Qayerga O'tsin?
+                  </label>
+
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                      <input
+                        type="radio"
+                        name="linkType"
+                        value="shop"
+                        checked={bannerFormData.linkType === 'shop'}
+                        onChange={() => setBannerFormData(prev => ({ ...prev, linkType: 'shop' }))}
+                        className="text-brand-teal focus:ring-brand-teal"
+                      />
+                      <span>Do'kon sahifasiga (/store/...)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                      <input
+                        type="radio"
+                        name="linkType"
+                        value="category"
+                        checked={bannerFormData.linkType === 'category'}
+                        onChange={() => setBannerFormData(prev => ({ ...prev, linkType: 'category' }))}
+                        className="text-brand-teal focus:ring-brand-teal"
+                      />
+                      <span>Katalog kategoriyasiga (/category/...)</span>
+                    </label>
+
+                    {bannerFormData.linkType === 'category' && (
+                      <select
+                        value={bannerFormData.linkCategory}
+                        onChange={(e) => setBannerFormData(prev => ({ ...prev, linkCategory: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold text-neutral-900 dark:text-white"
+                      >
+                        {categories.map(c => (
+                          <option key={c.id} value={c.slug}>{c.title_uz} ({c.slug})</option>
+                        ))}
+                      </select>
+                    )}
+
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                      <input
+                        type="radio"
+                        name="linkType"
+                        value="custom"
+                        checked={bannerFormData.linkType === 'custom'}
+                        onChange={() => setBannerFormData(prev => ({ ...prev, linkType: 'custom' }))}
+                        className="text-brand-teal focus:ring-brand-teal"
+                      />
+                      <span>Maxsus havola (URL)</span>
+                    </label>
+
+                    {bannerFormData.linkType === 'custom' && (
+                      <div className="space-y-1.5">
+                        <input
+                          type="text"
+                          value={bannerFormData.customUrl}
+                          onChange={(e) => setBannerFormData(prev => ({ ...prev, customUrl: e.target.value }))}
+                          placeholder="/store/nike-store yoki https://..."
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs text-neutral-900 dark:text-white"
+                        />
+                        {isLikelyImageUrl(bannerFormData.customUrl) && (
+                          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-2 text-xs text-amber-700 dark:text-amber-300">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                              <span className="truncate">Siz bu yerga rasm havolasini kiritdingiz!</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBannerFormData(prev => ({
+                                  ...prev,
+                                  image: sanitizeBannerImageUrl(prev.customUrl),
+                                  customUrl: ''
+                                }));
+                                setBannerImgError(false);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-bold text-[11px] shrink-0 hover:bg-amber-600 transition-colors cursor-pointer"
+                            >
+                              Reklama rasmi qilish
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                      <input
+                        type="checkbox"
+                        checked={bannerFormData.isActive}
+                        onChange={(e) => setBannerFormData(prev => ({ ...prev, isActive: e.target.checked }))}
+                        className="w-4 h-4 rounded text-brand-teal focus:ring-brand-teal"
+                      />
+                      <span>Reklama darhol faol bo'lsin (Bosh sahifada ko'rsatilsin)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* 6. Live Banner Preview */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-neutral-500 block">
+                  Bosh Sahifadagi Jonli Ko'rinishi (Live Preview):
+                </span>
+                <div className="relative w-full h-48 sm:h-56 rounded-2xl overflow-hidden shadow-lg border border-neutral-200 dark:border-neutral-700 bg-gradient-to-r from-neutral-950 via-teal-950/70 to-neutral-900">
+                  {bannerFormData.image ? (
+                    <img
+                      key={bannerFormData.image}
+                      src={sanitizeBannerImageUrl(bannerFormData.image)}
+                      referrerPolicy="no-referrer"
+                      alt="Preview"
+                      className="absolute inset-0 w-full h-full object-cover"
+                      loading="eager"
+                      onLoad={() => setBannerImgError(false)}
+                      onError={(e) => {
+                        handleBannerImageError(
+                          e.currentTarget,
+                          sanitizeBannerImageUrl(bannerFormData.image),
+                          undefined,
+                          () => setBannerImgError(true)
+                        );
+                      }}
+                    />
+                  ) : null}
+
+                  {bannerImgError && bannerFormData.image && (
+                    <div className="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-xl bg-amber-600/95 text-white text-[11px] font-bold shadow-lg flex items-center gap-1.5 backdrop-blur-sm border border-white/20">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span>Ushbu havola ochilmadi. Boshqa havola qo'ying yoki 'Fayl yuklash'ni bosing.</span>
+                    </div>
+                  )}
+
+                  <div className={`absolute inset-0 bg-gradient-to-r ${getSafeGradient(bannerFormData.bg_gradient)} p-5 sm:p-7 flex flex-col justify-center space-y-2.5`}>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-brand-teal text-white text-[10px] font-black uppercase tracking-wider shadow">
+                        {bannerFormData.badge_uz || "TOP TAKLIF"}
+                      </span>
+                      {bannerFormData.shopId && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-white text-[10px] font-bold border border-white/25">
+                          <Store className="w-2.5 h-2.5 text-amber-300" />
+                          <span>{shops.find(s => s.id === bannerFormData.shopId)?.name || "Do'kon"}</span>
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-base sm:text-xl font-extrabold text-white leading-tight drop-shadow max-w-lg line-clamp-2">
+                      {bannerFormData.title_uz || "Reklama Sarlavhasi"}
+                    </h3>
+                    <p className="text-xs text-neutral-200 max-w-md line-clamp-1 drop-shadow">
+                      {bannerFormData.subtitle_uz || "Qisqacha ta'rif va aksiya shartlari"}
+                    </p>
+                    <div className="pt-1">
+                      <span className="inline-block px-4 py-1.5 rounded-xl bg-white text-neutral-900 font-bold text-xs shadow-md">
+                        {bannerFormData.cta_uz || "Xarid qilish"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-100 dark:border-neutral-800 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsBannerModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-bold cursor-pointer"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-brand-teal text-white font-bold text-xs hover:bg-brand-teal-hover transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{editingBanner ? "O'zgarishlarni Saqlash" : "Reklamani E'lon Qilish"}</span>
+                </button>
+              </div>
+
             </form>
           </div>
         </div>

@@ -15,7 +15,12 @@ import {
   LogOut,
   Plus,
   Check,
-  Star
+  Star,
+  Sparkles,
+  Flame,
+  RotateCcw,
+  ShieldCheck,
+  Eye
 } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { getLocalizedProductText, getLocalizedColorName } from '../utils/translator';
@@ -25,6 +30,12 @@ export const CustomerPanel: React.FC = () => {
   const { 
     currentUser,
     logoutUser,
+    setIsAuthModalOpen,
+    guestVisitorId,
+    clearGuestStories,
+    viewedStoryIds,
+    cart,
+    setIsCartOpen,
     orders, 
     wishlist, 
     products, 
@@ -37,31 +48,37 @@ export const CustomerPanel: React.FC = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'addresses'>(
-    tabParam === 'wishlist' ? 'wishlist' : tabParam === 'addresses' ? 'addresses' : 'orders'
+  const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'cart' | 'stories' | 'addresses'>(
+    tabParam === 'wishlist' ? 'wishlist' : 
+    tabParam === 'addresses' ? 'addresses' : 
+    tabParam === 'cart' ? 'cart' : 
+    tabParam === 'stories' ? 'stories' : 'orders'
   );
 
   useEffect(() => {
-    if (tabParam === 'wishlist' || tabParam === 'addresses' || tabParam === 'orders') {
-      setActiveTab(tabParam);
+    if (tabParam === 'wishlist' || tabParam === 'addresses' || tabParam === 'orders' || tabParam === 'cart' || tabParam === 'stories') {
+      setActiveTab(tabParam as any);
     }
   }, [tabParam]);
   const [newAddressText, setNewAddressText] = useState('');
   const [isAddingAddress, setIsAddingAddress] = useState(false);
 
-  // Filter only this specific user's orders
+  // Filter only this specific user's or guest's orders (isolated session)
   const userOrders = useMemo(() => {
-    if (!currentUser) return [];
-    const cleanCurrentPhone = currentUser.phone.replace(/[^0-9]/g, '').slice(-9);
-    return orders.filter(ord => {
-      if (ord.userId && ord.userId === currentUser.id) return true;
-      if (ord.customerPhone) {
-        const cleanOrdPhone = ord.customerPhone.replace(/[^0-9]/g, '').slice(-9);
-        if (cleanOrdPhone && cleanOrdPhone === cleanCurrentPhone) return true;
-      }
-      return false;
-    });
-  }, [orders, currentUser]);
+    if (currentUser) {
+      const cleanCurrentPhone = currentUser.phone ? currentUser.phone.replace(/[^0-9]/g, '').slice(-9) : '';
+      return orders.filter(ord => {
+        if (ord.userId && ord.userId === currentUser.id) return true;
+        if (cleanCurrentPhone && ord.customerPhone) {
+          const cleanOrdPhone = ord.customerPhone.replace(/[^0-9]/g, '').slice(-9);
+          if (cleanOrdPhone && cleanOrdPhone === cleanCurrentPhone) return true;
+        }
+        return false;
+      });
+    }
+    // Guest orders are strictly filtered by unique guest device ID
+    return orders.filter(ord => ord.guestVisitorId === guestVisitorId);
+  }, [orders, currentUser, guestVisitorId]);
 
   const wishlistProducts = products.filter(p => wishlist.includes(p.id));
 
@@ -97,74 +114,126 @@ export const CustomerPanel: React.FC = () => {
     }
   };
 
-  if (!currentUser) {
-    return (
-      <div className="max-w-md mx-auto my-12 p-8 text-center bg-white dark:bg-[#141414] rounded-3xl border border-neutral-200 dark:border-neutral-800 space-y-4">
-        <User className="w-12 h-12 text-brand-teal mx-auto" />
-        <h3 className="text-lg font-black text-neutral-900 dark:text-white">Profilga kirilmagan</h3>
-        <p className="text-xs text-neutral-500">Iltimos, shaxsiy profilingizga kiring yoki yangi hisob oching.</p>
-        <button
-          onClick={() => navigate('/')}
-          className="px-6 py-2.5 rounded-xl bg-brand-teal text-white font-bold text-xs"
-        >
-          Bosh sahifaga qaytish
-        </button>
-      </div>
-    );
-  }
-
-  const userInitial = currentUser.fullName.trim().charAt(0).toUpperCase() || 'U';
-
   return (
     <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 space-y-6">
-      {/* Profile Overview Card */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-neutral-900 text-white shadow-xl border border-neutral-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-4">
-          <div className="w-16 h-16 rounded-2xl bg-brand-teal/20 text-brand-teal flex items-center justify-center font-black text-2xl border border-brand-teal/30 shrink-0">
-            {userInitial}
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black">{currentUser.fullName}</h1>
-            <p className="text-xs text-neutral-400 mt-0.5">
-              {currentUser.phone} {currentUser.email ? `• ${currentUser.email}` : ''}
-            </p>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-[10px] font-bold text-brand-teal">
-                Mayami Xaridori
-              </span>
+      {/* Profile Overview Card: Dynamic for Registered User OR Clean Uzum-style Personal Guest Session */}
+      {currentUser ? (
+        <div className="p-6 sm:p-8 rounded-3xl bg-neutral-900 text-white shadow-xl border border-neutral-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-4">
+            <div className="w-16 h-16 rounded-2xl bg-brand-teal/20 text-brand-teal flex items-center justify-center font-black text-2xl border border-brand-teal/30 shrink-0">
+              {currentUser.avatar ? (
+                <img src={currentUser.avatar} alt="" className="w-full h-full rounded-2xl object-cover" />
+              ) : (
+                currentUser.fullName.trim().charAt(0).toUpperCase() || 'U'
+              )}
             </div>
-          </div>
-        </div>
-
-        {/* Quick Stats & Logout */}
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex items-center gap-3">
-            <div className="px-4 py-2.5 rounded-xl bg-white/10 text-center">
-              <div className="text-lg font-black text-white">{userOrders.length}</div>
-              <div className="text-[10px] text-neutral-400 uppercase">Buyurtmalar</div>
-            </div>
-            <div className="px-4 py-2.5 rounded-xl bg-white/10 text-center">
-              <div className="text-lg font-black text-rose-400">{wishlist.length}</div>
-              <div className="text-[10px] text-neutral-400 uppercase">Sevimlilar</div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black">{currentUser.fullName}</h1>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                {currentUser.phone} {currentUser.email ? `• ${currentUser.email}` : ''}
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-[10px] font-bold text-brand-teal">
+                  Mayami Xaridori
+                </span>
+              </div>
             </div>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="p-2.5 sm:px-3 sm:py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold flex items-center gap-1.5 transition-all"
-            title="Tizimdan chiqish"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">Chiqish</span>
-          </button>
+          {/* Quick Stats & Logout */}
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="flex items-center gap-3">
+              <div className="px-4 py-2.5 rounded-xl bg-white/10 text-center">
+                <div className="text-lg font-black text-white">{userOrders.length}</div>
+                <div className="text-[10px] text-neutral-400 uppercase">Buyurtmalar</div>
+              </div>
+              <div className="px-4 py-2.5 rounded-xl bg-white/10 text-center">
+                <div className="text-lg font-black text-rose-400">{wishlist.length}</div>
+                <div className="text-[10px] text-neutral-400 uppercase">Sevimlilar</div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="p-2.5 sm:px-3 sm:py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Tizimdan chiqish"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Chiqish</span>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* Uzum Market-style Personal Cabinet Header for Guest Visitor */
+        <div className="p-6 sm:p-8 rounded-3xl bg-neutral-900 text-white shadow-xl border border-neutral-800 space-y-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-16 h-16 rounded-2xl bg-brand-teal/20 text-brand-teal flex items-center justify-center font-black text-2xl border border-brand-teal/30 shrink-0">
+                <User className="w-8 h-8 text-brand-teal" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black">Shaxsiy kabinet</h1>
+                <p className="text-xs text-neutral-400 mt-1 max-w-lg">
+                  Buyurtmalaringizni kuzatish va xaridlarni to'liq boshqarish uchun profilingizga kiring.
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-[10px] font-bold text-neutral-300 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-brand-teal" />
+                    Shaxsiy qurilma seansi
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsAuthModalOpen(true)}
+              className="px-5 py-2.5 rounded-xl bg-brand-teal hover:bg-brand-teal-hover text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
+            >
+              <User className="w-4 h-4" />
+              <span>Kirish / Ro'yxatdan o'tish</span>
+            </button>
+          </div>
+
+          {/* Quick Stats Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-neutral-800">
+            <div 
+              onClick={() => setActiveTab('wishlist')}
+              className={`p-3 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer ${activeTab === 'wishlist' ? 'ring-2 ring-brand-teal' : ''}`}
+            >
+              <div className="text-xl font-black text-rose-400">{wishlist.length}</div>
+              <div className="text-[11px] text-neutral-400 font-bold uppercase mt-0.5">Sevimlilar</div>
+            </div>
+            <div 
+              onClick={() => setActiveTab('cart')}
+              className={`p-3 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer ${activeTab === 'cart' ? 'ring-2 ring-brand-teal' : ''}`}
+            >
+              <div className="text-xl font-black text-amber-400">{cart.length}</div>
+              <div className="text-[11px] text-neutral-400 font-bold uppercase mt-0.5">Savatchada</div>
+            </div>
+            <div 
+              onClick={() => setActiveTab('stories')}
+              className={`p-3 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer ${activeTab === 'stories' ? 'ring-2 ring-brand-teal' : ''}`}
+            >
+              <div className="text-xl font-black text-teal-400">{viewedStoryIds.length}</div>
+              <div className="text-[11px] text-neutral-400 font-bold uppercase mt-0.5">Ko'rilgan stories</div>
+            </div>
+            <div 
+              onClick={() => setActiveTab('orders')}
+              className={`p-3 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer ${activeTab === 'orders' ? 'ring-2 ring-brand-teal' : ''}`}
+            >
+              <div className="text-xl font-black text-white">{userOrders.length}</div>
+              <div className="text-[11px] text-neutral-400 font-bold uppercase mt-0.5">Buyurtmalar</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
-      <div className="flex items-center space-x-2 border-b border-neutral-200 dark:border-neutral-800 pb-3 text-xs font-bold">
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 dark:border-neutral-800 pb-3 text-xs font-bold">
         <button
           onClick={() => setActiveTab('orders')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'orders'
               ? 'bg-brand-teal text-white shadow'
               : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
@@ -175,26 +244,50 @@ export const CustomerPanel: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('wishlist')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'wishlist'
               ? 'bg-brand-teal text-white shadow'
               : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
           }`}
         >
-          <Heart className="w-4 h-4 text-rose-300" />
+          <Heart className="w-4 h-4 text-rose-400" />
           <span>{t.panels.myWishlist} ({wishlistProducts.length})</span>
         </button>
         <button
-          onClick={() => setActiveTab('addresses')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
-            activeTab === 'addresses'
+          onClick={() => setActiveTab('cart')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'cart'
               ? 'bg-brand-teal text-white shadow'
               : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
           }`}
         >
-          <MapPin className="w-4 h-4" />
-          <span>{t.panels.myAddresses} ({currentUser.addresses?.length || 0})</span>
+          <Package className="w-4 h-4 text-amber-400" />
+          <span>Savatcham ({cart.length})</span>
         </button>
+        <button
+          onClick={() => setActiveTab('stories')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'stories'
+              ? 'bg-brand-teal text-white shadow'
+              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          }`}
+        >
+          <Flame className="w-4 h-4 text-teal-400" />
+          <span>Ko'rilgan storieslar ({viewedStoryIds.length})</span>
+        </button>
+        {currentUser && (
+          <button
+            onClick={() => setActiveTab('addresses')}
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'addresses'
+                ? 'bg-brand-teal text-white shadow'
+                : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+            }`}
+          >
+            <MapPin className="w-4 h-4" />
+            <span>{t.panels.myAddresses} ({currentUser.addresses?.length || 0})</span>
+          </button>
+        )}
       </div>
 
       {/* 1. Orders Tab */}
@@ -211,7 +304,7 @@ export const CustomerPanel: React.FC = () => {
               </p>
               <button
                 onClick={() => navigate('/')}
-                className="px-5 py-2.5 rounded-xl bg-brand-teal text-white text-xs font-bold hover:bg-brand-teal-hover transition-all"
+                className="px-5 py-2.5 rounded-xl bg-brand-teal text-white text-xs font-bold hover:bg-brand-teal-hover transition-all cursor-pointer"
               >
                 Xaridni boshlash
               </button>
@@ -238,7 +331,7 @@ export const CustomerPanel: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateOrderStatus(ord.id, 'delivered')}
-                        className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
+                        className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                         title="Tovarni kuryerdan yoki yetkazish punktidan oldim"
                       >
                         <CheckCircle className="w-3.5 h-3.5" />
@@ -368,8 +461,95 @@ export const CustomerPanel: React.FC = () => {
         </div>
       )}
 
-      {/* 3. Saved Addresses Tab */}
-      {activeTab === 'addresses' && (
+      {/* 3. Cart Tab */}
+      {activeTab === 'cart' && (
+        <div className="space-y-4">
+          {cart.length === 0 ? (
+            <div className="p-12 text-center rounded-3xl bg-white dark:bg-[#141414] border border-neutral-200 dark:border-neutral-800 text-neutral-400 text-xs space-y-2">
+              <ShoppingBag className="w-10 h-10 text-neutral-300 dark:text-neutral-700 mx-auto" />
+              <div className="font-bold text-neutral-700 dark:text-neutral-300">Savatchangiz bo'sh</div>
+              <p>O'zingizga yoqqan mahsulotlarni savatchaga qo'shing!</p>
+              <button
+                onClick={() => navigate('/')}
+                className="mt-2 px-5 py-2 rounded-xl bg-brand-teal text-white font-bold text-xs cursor-pointer"
+              >
+                Katalogga o'tish
+              </button>
+            </div>
+          ) : (
+            <div className="p-6 rounded-3xl bg-white dark:bg-[#141414] border border-neutral-200 dark:border-neutral-800 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
+                <span className="text-sm font-bold text-neutral-900 dark:text-white">Savatchadagi tovarlar ({cart.length})</span>
+                <button
+                  onClick={() => setIsCartOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-brand-teal text-white font-bold text-xs hover:bg-brand-teal-hover transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Savatchani ochish va xarid qilish</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {cart.map((it, idx) => (
+                  <div key={idx} className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/50 flex items-center gap-3">
+                    <img src={it.selectedImage || it.product.image_url} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-neutral-900 dark:text-white truncate">{getLocalizedProductText(it.product, 'title', language)}</div>
+                      <div className="text-[11px] text-neutral-400 mt-0.5">Miqdor: {it.quantity} dona</div>
+                      <div className="text-xs font-black text-brand-teal mt-1">{(it.product.price * it.quantity).toLocaleString('ru-RU')} {t.common.currency}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 4. Stories Tab */}
+      {activeTab === 'stories' && (
+        <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#141414] border border-neutral-200 dark:border-neutral-800 space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-neutral-200 dark:border-neutral-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-teal/10 text-brand-teal flex items-center justify-center">
+                <Flame className="w-5 h-5 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-neutral-900 dark:text-white">
+                  Siz ko'rgan storieslar tarixi ({viewedStoryIds.length} ta)
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Ushbu ro'yxat faqat sizning qurilmangizga tegishli va boshqa foydalanuvchilar bilan aralashmaydi.
+                </p>
+              </div>
+            </div>
+
+            {viewedStoryIds.length > 0 && (
+              <button
+                type="button"
+                onClick={clearGuestStories}
+                className="px-3.5 py-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-brand-teal" />
+                <span>Storieslarni qayta rangli qilish</span>
+              </button>
+            )}
+          </div>
+
+          {viewedStoryIds.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <Eye className="w-8 h-8 text-neutral-300 dark:text-neutral-700 mx-auto" />
+              <p className="text-xs text-neutral-500 font-medium">Siz hali birorta ham stories ko'rmagansiz. Barcha storieslar rangli halqa bilan turibdi!</p>
+            </div>
+          ) : (
+            <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-xs text-neutral-600 dark:text-neutral-400">
+              Siz {viewedStoryIds.length} ta do'kon storiesini tomosha qildingiz. Agar ularni yana rangli ko'rishni xohlasangiz, yuqoridagi <b>"Storieslarni qayta rangli qilish"</b> tugmasini bosing.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 5. Saved Addresses Tab (Only for Logged-In User) */}
+      {currentUser && activeTab === 'addresses' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-neutral-900 dark:text-white">
@@ -377,7 +557,7 @@ export const CustomerPanel: React.FC = () => {
             </h3>
             <button
               onClick={() => setIsAddingAddress(!isAddingAddress)}
-              className="px-3 py-1.5 rounded-xl bg-brand-teal text-white text-xs font-bold flex items-center gap-1.5 hover:bg-brand-teal-hover transition-all"
+              className="px-3 py-1.5 rounded-xl bg-brand-teal text-white text-xs font-bold flex items-center gap-1.5 hover:bg-brand-teal-hover transition-all cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Yangi manzil qo'shish</span>
@@ -401,13 +581,13 @@ export const CustomerPanel: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsAddingAddress(false)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
                 >
                   Bekor qilish
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-brand-teal text-white text-xs font-bold flex items-center gap-1"
+                  className="px-4 py-1.5 rounded-lg bg-brand-teal text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Saqlash</span>

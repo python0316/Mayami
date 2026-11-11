@@ -5644,7 +5644,7 @@ export const initialShops = [
     ],
     "followersCount": 8450,
     "responseTime": "15 min",
-    "phone": "+998 88 678 22 04",
+    "phone": "+998 71 200 11 22",
     "address": "Toshkent sh., Chilonzor tumani, Bunyodkor shoh ko'chasi 42",
     "stories": [
       {
@@ -5703,7 +5703,7 @@ export const initialShops = [
     ],
     "followersCount": 5120,
     "responseTime": "30 min",
-    "phone": "+998 88 678 22 04",
+    "phone": "+998 71 200 33 44",
     "address": "Toshkent sh., Abu Saxiy savdo markazi, 4-qator 12-do'kon",
     "stories": [
       {
@@ -5751,7 +5751,7 @@ export const initialShops = [
     ],
     "followersCount": 12400,
     "responseTime": "5 min",
-    "phone": "+998 88 678 22 04",
+    "phone": "+998 71 200 55 66",
     "address": "Toshkent sh., Mirobod tumani, Nukus ko'chasi 71",
     "stories": [
       {
@@ -5788,7 +5788,7 @@ export const initialShops = [
     ],
     "followersCount": 4300,
     "responseTime": "20 min",
-    "phone": "+998 88 678 22 04",
+    "phone": "+998 71 200 77 88",
     "address": "Toshkent sh., Yunusobod tumani, Amir Temur shox ko'chasi 108",
     "stories": [
       {
@@ -5826,7 +5826,7 @@ export const initialShops = [
     ],
     "followersCount": 3800,
     "responseTime": "45 min",
-    "phone": "+998 88 678 22 04",
+    "phone": "+998 71 200 99 00",
     "address": "Toshkent sh., Shayxontohur tumani, Navoiy ko'chasi 15",
     "stories": [
       {
@@ -6064,7 +6064,7 @@ export const initialBanners = [
     "cta_uz": "Xarid qilish",
     "cta_ru": "Купить сейчас",
     "cta_en": "Shop Now",
-    "bg_gradient": "from-neutral-900 to-neutral-800",
+    "bg_gradient": "from-neutral-950/85 via-neutral-950/40 to-transparent",
     "image": "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1400&auto=format&fit=crop&q=80",
     "badge_uz": "TOP TAKLIF",
     "badge_ru": "ТОП ПРЕДЛОЖЕНИЕ",
@@ -6082,7 +6082,7 @@ export const initialBanners = [
     "cta_uz": "Katalogga o'tish",
     "cta_ru": "В каталог",
     "cta_en": "Explore Catalog",
-    "bg_gradient": "from-cyan-950 to-neutral-900",
+    "bg_gradient": "from-cyan-950/85 via-cyan-950/40 to-transparent",
     "image": "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=1400&auto=format&fit=crop&q=80",
     "badge_uz": "YANGI MAVSUM",
     "badge_ru": "НОВЫЙ СЕЗОН",
@@ -6100,7 +6100,7 @@ export const initialBanners = [
     "cta_uz": "Ko'rish",
     "cta_ru": "Смотреть",
     "cta_en": "View Collection",
-    "bg_gradient": "from-stone-900 to-neutral-900",
+    "bg_gradient": "from-stone-950/85 via-stone-950/40 to-transparent",
     "image": "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=1400&auto=format&fit=crop&q=80",
     "badge_uz": "PREMIUM",
     "badge_ru": "ПРЕМИУМ",
