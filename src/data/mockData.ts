@@ -5645,7 +5645,7 @@ export const initialShops = [
     "followersCount": 8450,
     "responseTime": "15 min",
     "phone": "+998 71 200 11 22",
-    "address": "Toshkent sh., Chilonzor tumani, Bunyodkor shoh ko'chasi 42",
+    "address": "Toshkent shahri",
     "stories": [
       {
         "id": "story_1_1",
@@ -5704,7 +5704,7 @@ export const initialShops = [
     "followersCount": 5120,
     "responseTime": "30 min",
     "phone": "+998 71 200 33 44",
-    "address": "Toshkent sh., Abu Saxiy savdo markazi, 4-qator 12-do'kon",
+    "address": "Toshkent shahri",
     "stories": [
       {
         "id": "story_2_1",
@@ -5752,7 +5752,7 @@ export const initialShops = [
     "followersCount": 12400,
     "responseTime": "5 min",
     "phone": "+998 71 200 55 66",
-    "address": "Toshkent sh., Mirobod tumani, Nukus ko'chasi 71",
+    "address": "Toshkent shahri",
     "stories": [
       {
         "id": "story_3_1",
@@ -5789,7 +5789,7 @@ export const initialShops = [
     "followersCount": 4300,
     "responseTime": "20 min",
     "phone": "+998 71 200 77 88",
-    "address": "Toshkent sh., Yunusobod tumani, Amir Temur shox ko'chasi 108",
+    "address": "Toshkent shahri",
     "stories": [
       {
         "id": "story_4_1",
@@ -5827,7 +5827,7 @@ export const initialShops = [
     "followersCount": 3800,
     "responseTime": "45 min",
     "phone": "+998 71 200 99 00",
-    "address": "Toshkent sh., Shayxontohur tumani, Navoiy ko'chasi 15",
+    "address": "Toshkent shahri",
     "stories": [
       {
         "id": "story_5_1",

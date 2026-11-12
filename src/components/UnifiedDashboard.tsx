@@ -3024,7 +3024,7 @@ export const UnifiedDashboard: React.FC = () => {
                   <label className="block text-xs font-bold text-neutral-500 mb-1">Manzil</label>
                   <input
                     type="text"
-                    defaultValue={currentShop?.address || 'Toshkent shahar'}
+                    defaultValue={currentShop?.address || 'Toshkent shahri'}
                     onChange={(e) => currentShop && updateShopProfile(currentShop.id, { address: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                   />
@@ -4159,6 +4159,7 @@ export const UnifiedDashboard: React.FC = () => {
                     type="text"
                     value={newShopAddress}
                     onChange={(e) => setNewShopAddress(e.target.value)}
+                    placeholder="Toshkent shahri"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-bold"
                   />
                 </div>

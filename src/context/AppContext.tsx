@@ -394,11 +394,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const SHOPS_STORAGE_KEY = 'mall_shops_v10';
+  const SHOPS_STORAGE_KEY = 'mall_shops_v11';
 
   // Shops State
   const [shops, setShops] = useState<Shop[]>(() => {
-    const saved = localStorage.getItem(SHOPS_STORAGE_KEY);
+    const saved = localStorage.getItem(SHOPS_STORAGE_KEY) || localStorage.getItem('mall_shops_v10');
     let loaded: Shop[] = [];
     if (saved) {
       try {
@@ -428,6 +428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const freshStories = reanchorStories(s.stories || []);
       map.set(s.id, {
         ...s,
+        address: 'Toshkent shahri',
         permissions: s.permissions || DEFAULT_VENDOR_PERMISSIONS,
         stories: freshStories
       });
@@ -444,6 +445,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         map.set(s.id, {
           ...existing,
           ...s,
+          address: 'Toshkent shahri',
           permissions: s.permissions || existing?.permissions || DEFAULT_VENDOR_PERMISSIONS,
           stories: mergedStories
         });
@@ -452,6 +454,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return Array.from(map.values()).map(s => ({
       ...s,
+      address: 'Toshkent shahri',
       avatar: (s.avatar || '').replace(/cdn\.Mayami\.com/g, 'cdn.2020mall.com'),
       banner: (s.banner || '').replace(/cdn\.Mayami\.com/g, 'cdn.2020mall.com'),
       username: s.username || (s.slug ? s.slug.replace(/-/g, '_') + '_shop' : 'shop_vendor'),
@@ -463,7 +466,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   useEffect(() => {
-    localStorage.setItem('mall_shops_v10', JSON.stringify(shops));
+    localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(shops));
   }, [shops]);
 
   // UNIFIED ADMIN / VENDOR AUTH SESSION
@@ -1997,7 +2000,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       followersCount: 10,
       responseTime: '10 min',
       phone: shopData.phone || '',
-      address: shopData.address || 'Toshkent shahar',
+      address: shopData.address || 'Toshkent shahri',
       stories: [],
       permissions: shopData.permissions || DEFAULT_VENDOR_PERMISSIONS
     };

@@ -133,7 +133,7 @@ export const StorePage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>{shop.address}</span>
+                  <span>{shop.address || "Toshkent shahri"}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Phone className="w-3.5 h-3.5 text-neutral-400" />
